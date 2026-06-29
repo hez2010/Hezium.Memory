@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>Hezium.Memory</PackageId>
+    <Title>Hezium.Memory</Title>
+    <Authors>hez2010</Authors>
+    <Description>A one-dimensional, zero-based BigArray, BigSpan and BigReadOnlySpan types and helpers for arrays that exceed the standard .NET array limits.</Description>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>array;bigarray;largearray;collections;bigcollections;largecollections;span;readonlyspan;bigspan;bigreadonlyspan;largespan;largereadonlyspan</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE.txt" Pack="true" PackagePath="" />
+    <None Include="..\README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

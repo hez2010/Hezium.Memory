@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Hezium.Collections;
+namespace Hezium.Memory;
 
 public sealed partial class BigArray<T>
 {

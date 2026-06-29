@@ -1,15 +1,17 @@
-# BigArray
+# Hezium.Memory
 
-`BigArray` provides array-like storage and span-like views that use `nint` lengths and indexes, allowing logical collections larger than `Array.MaxLength`.
+A library for working with large arrays and spans in .NET, supporting lengths and indexes larger than `Array.MaxLength`.
 
 ## Requirements
 
 - .NET 10 or above
 
-## Quick Start
+## BigArray
+
+`BigArray` provides array-like storage and span-like views that use `nint` lengths and indexes, allowing collections larger than `Array.MaxLength`.
 
 ```csharp
-using Hezium.Collections;
+using Hezium.Memory;
 
 var values = new BigArray<long>(10);
 
@@ -24,7 +26,7 @@ for (nint i = 0; i < values.Length; i++)
 Console.WriteLine(values[9]);
 ```
 
-Use `BigArray<T>.MaxLength` to check the largest supported logical length for an element type:
+Use `BigArray<T>.MaxLength` to check the largest supported length for an element type:
 
 ```csharp
 nint maxLongs = BigArray<long>.MaxLength;
@@ -35,7 +37,7 @@ Value-type elements whose size is larger than 65535 bytes are not supported.
 
 ## BigSpan
 
-`BigSpan<T>` is a `ref struct` view over a contiguous logical range of elements. You can create one from a `BigArray<T>`:
+`BigSpan<T>` is a `ref struct` view over a contiguous range of elements. You can create one from a `BigArray<T>`:
 
 ```csharp
 BigArray<int> array = new(1024);
@@ -66,7 +68,7 @@ The library adds `MemoryMarshal` extension members for creating and inspecting b
 
 ```csharp
 using System.Runtime.InteropServices;
-using Hezium.Collections;
+using Hezium.Memory;
 
 int first = 123;
 
@@ -80,23 +82,3 @@ For read-only spans:
 BigReadOnlySpan<int> readOnlySpan = span;
 ref readonly int reference = ref MemoryMarshal.GetReference(readOnlySpan);
 ```
-
-## Span Operations
-
-`BigSpan<T>` has extension methods for common sequence operations:
-
-```csharp
-BigArray<int> source = new(1024);
-BigArray<int> destination = new(1024);
-
-BigSpan<int> sourceSpan = source.AsBigSpan();
-BigSpan<int> destinationSpan = destination.AsBigSpan();
-
-sourceSpan.CopyTo(destinationSpan);
-
-bool equal = sourceSpan.SequenceEqual(destinationSpan);
-bool contains42 = sourceSpan.Contains(42);
-int comparison = sourceSpan.SequenceCompareTo(destinationSpan);
-```
-
-These operations process the data in regular `Span<T>` sized segments internally.

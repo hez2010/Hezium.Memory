@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace Hezium.Collections;
+namespace Hezium.Memory;
 
 public sealed partial class BigArray<T>
 {

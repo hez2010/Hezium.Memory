@@ -3,12 +3,12 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Hezium.Collections;
+namespace Hezium.Memory;
 
 /// <summary>
 /// Provides extension methods for <see cref="BigArray{T}"/>, <see cref="BigSpan{T}"/>, <see cref="BigReadOnlySpan{T}"/>, and <see cref="MemoryMarshal"/>.
 /// </summary>
-public static class BigArrayExtensions
+public static class MemoryExtensions
 {
     extension(MemoryMarshal)
     {

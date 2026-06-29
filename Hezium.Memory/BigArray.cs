@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Hezium.Collections;
+namespace Hezium.Memory;
 
 /// <summary>
 /// Represents a one-dimensional, zero-based collection that can expose more than <see cref="Array.MaxLength"/> logical elements.

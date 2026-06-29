@@ -1,0 +1,498 @@
+using System.Buffers;
+using System.Collections;
+using System.Runtime.InteropServices;
+using Hezium.Memory;
+
+namespace Hezium.Memory.Tests;
+
+public sealed class HeziumMemoryApiTests
+{
+    [Fact]
+    public void BigArray_CoreApis_Work()
+    {
+        Assert.True(BigArray<int>.Empty.IsEmpty);
+        Assert.Equal(0, BigArray<int>.Empty.Length);
+        Assert.True(BigArray<byte>.MaxLength > Array.MaxLength);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BigArray<int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BigArray<byte>(BigArray<byte>.MaxLength + 1));
+
+        BigArray<int> array = new(5);
+        Assert.False(array.IsEmpty);
+        Assert.Equal(5, array.Length);
+
+        for (nint i = 0; i < array.Length; i++)
+        {
+            array[i] = (int)(i + 1);
+        }
+
+        Assert.Equal(1, array[0]);
+        Assert.Equal(5, array[4]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => array[-1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => array[5]);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, array.ToArray());
+        Assert.Equal(new[] { 2, 3, 4 }, array.AsSpan(1, 3).ToArray());
+
+        BigSpan<int> span = array.AsBigSpan();
+        Assert.Equal(5, span.Length);
+        Assert.Equal(new[] { 3, 4, 5 }, ToArray(array.AsBigSpan(2)));
+        Assert.Equal(new[] { 2, 3 }, ToArray(array.AsBigSpan(1, 2)));
+
+        List<int> enumerated = [];
+        foreach (int value in array)
+        {
+            enumerated.Add(value);
+        }
+
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, enumerated);
+
+        IEnumerator enumerator = ((IEnumerable)array).GetEnumerator();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(1, enumerator.Current);
+        enumerator.Reset();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(1, enumerator.Current);
+    }
+
+    [Fact]
+    public void BigArray_ExtensionApis_Work()
+    {
+        BigArray<int> array = new(5);
+        array.Fill(7);
+        Assert.Equal(new[] { 7, 7, 7, 7, 7 }, array.ToArray());
+
+        array.Clear();
+        Assert.Equal(new[] { 0, 0, 0, 0, 0 }, array.ToArray());
+
+        for (nint i = 0; i < array.Length; i++)
+        {
+            array[i] = (int)(i + 1);
+        }
+
+        BigArray<int> destination = new(7);
+        array.CopyTo(destination, 1);
+        Assert.Equal(new[] { 0, 1, 2, 3, 4, 5, 0 }, destination.ToArray());
+
+        BigArray<int> exact = new(5);
+        array.CopyTo(exact);
+        Assert.True(array.TryCopyTo(exact));
+        Assert.False(array.TryCopyTo(new BigArray<int>(4)));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, exact.ToArray());
+
+        Assert.Equal(2, array.IndexOf(3));
+        Assert.Equal(2, array.LastIndexOf(3));
+        Assert.True(array.Contains(4));
+        Assert.False(array.Contains(6));
+        Assert.Equal(3, array.BinarySearch(4));
+        Assert.Equal(3, array.BinarySearch(4, Comparer<int>.Default));
+    }
+
+    [Fact]
+    public unsafe void BigSpan_CoreApis_Work()
+    {
+        Assert.True(BigSpan<int>.Empty.IsEmpty);
+        Assert.Equal(0, BigSpan<int>.Empty.Length);
+
+        int value = 41;
+        BigSpan<int> single = new(ref value);
+        single[0]++;
+        Assert.Equal(42, value);
+        Assert.Equal(42, single.GetPinnableReference());
+
+        Span<int> source = [1, 2, 3, 4];
+        BigSpan<int> span = source;
+        Assert.False(span.IsEmpty);
+        Assert.Equal(4, span.Length);
+        Assert.Equal(3, span[2]);
+        Assert.Equal(new[] { 2, 3, 4 }, ToArray(span.Slice(1)));
+        Assert.Equal(new[] { 2, 3 }, ToArray(span.Slice(1, 2)));
+        Assert.Throws<ArgumentOutOfRangeException>(SliceBigSpanPastEnd);
+        Assert.Throws<ArgumentOutOfRangeException>(IndexBigSpanPastEnd);
+
+        BigSpan<int>.Enumerator enumerator = span.GetEnumerator();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(1, enumerator.Current);
+        enumerator.Reset();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(1, enumerator.Current);
+
+        fixed (int* pointer = source)
+        {
+            BigSpan<int> pointerSpan = new(pointer, source.Length);
+            Assert.Equal(new[] { 1, 2, 3, 4 }, ToArray(pointerSpan));
+            Assert.Throws<ArgumentOutOfRangeException>(CreateBigSpanWithNegativePointerLength);
+        }
+    }
+
+    [Fact]
+    public void BigSpan_ExtensionApis_Work()
+    {
+        int[] values = [1, 2, 3, 2, 1];
+        BigSpan<int> span = values;
+
+        Assert.Equal(1, span.IndexOf(2));
+        Assert.Equal(3, span.LastIndexOf(2));
+        Assert.True(span.Contains(3));
+        Assert.Equal(2, span.IndexOfAny(4, 3));
+        Assert.Equal(1, span.IndexOfAny(4, 2, 9));
+        Assert.Equal(3, span.LastIndexOfAny(4, 2));
+        Assert.Equal(3, span.LastIndexOfAny(4, 2, 9));
+        Assert.True(span.ContainsAny(9, 3));
+        Assert.True(span.ContainsAny(9, 3, 8));
+        Assert.Equal(0, span.IndexOfAnyExcept(2));
+        Assert.Equal(2, span.IndexOfAnyExcept(1, 2));
+        Assert.Equal(-1, span.IndexOfAnyExcept(1, 2, 3));
+        Assert.Equal(4, span.LastIndexOfAnyExcept(2));
+        Assert.Equal(2, span.LastIndexOfAnyExcept(1, 2));
+        Assert.Equal(-1, span.LastIndexOfAnyExcept(1, 2, 3));
+        Assert.True(span.ContainsAnyExcept(2));
+        Assert.True(span.ContainsAnyExcept(1, 2));
+        Assert.False(span.ContainsAnyExcept(1, 2, 3));
+
+        BigReadOnlySpan<int> needles = new[] { 3, 9 };
+        Assert.Equal(2, span.IndexOfAny(needles));
+        Assert.Equal(2, span.LastIndexOfAny(needles));
+        Assert.True(span.ContainsAny(needles));
+        Assert.Equal(1, span.IndexOfAnyExcept(new[] { 1, 3 }));
+        Assert.Equal(3, span.LastIndexOfAnyExcept(new[] { 1, 3 }));
+        Assert.True(span.ContainsAnyExcept(new[] { 1, 3 }));
+
+        Assert.True(span.SequenceEqual((BigReadOnlySpan<int>)values.AsSpan()));
+        Assert.True(span.SequenceEqual((BigSpan<int>)values.AsSpan()));
+        Assert.True(span.SequenceCompareTo((BigReadOnlySpan<int>)new[] { 1, 2, 4 }) < 0);
+        Assert.Equal(0, span.SequenceCompareTo((BigSpan<int>)values.AsSpan()));
+        Assert.True(span.StartsWith(new[] { 1, 2 }));
+        Assert.True(span.EndsWith(new[] { 2, 1 }));
+        Assert.Equal(2, span.BinarySearch(3));
+        Assert.Equal(2, span.BinarySearch(3, Comparer<int>.Default));
+
+        Assert.Equal(2, span.IndexOfAnyInRange(3, 4));
+        Assert.Equal(2, span.LastIndexOfAnyInRange(3, 4));
+        Assert.True(span.ContainsAnyInRange(3, 4));
+        Assert.Equal(0, span.IndexOfAnyExceptInRange(2, 3));
+        Assert.Equal(4, span.LastIndexOfAnyExceptInRange(2, 3));
+        Assert.True(span.ContainsAnyExceptInRange(2, 3));
+    }
+
+    [Fact]
+    public void BigSpan_CopyConvertTrimSplitAndSortApis_Work()
+    {
+        int[] values = [0, 2, 1, 2, 0];
+        BigSpan<int> span = values;
+
+        Assert.Equal(new[] { 2, 1, 2 }, ToArray(span.Trim(0)));
+        Assert.Equal(new[] { 1 }, ToArray(span.Trim(new[] { 0, 2 })));
+        Assert.Equal(new[] { 2, 1, 2, 0 }, ToArray(span.TrimStart(0)));
+        Assert.Equal(new[] { 1, 2, 0 }, ToArray(span.TrimStart(new[] { 0, 2 })));
+        Assert.Equal(new[] { 0, 2, 1, 2 }, ToArray(span.TrimEnd(0)));
+        Assert.Equal(new[] { 0, 2, 1 }, ToArray(span.TrimEnd(new[] { 0, 2 })));
+
+        Assert.Equal(new[] { 0, 2, 1, 2, 0 }, span.ToArray());
+        Assert.Equal(new[] { 2, 1, 2 }, span.ToSpan(1, 3).ToArray());
+        Assert.Equal(new[] { 0, 2, 1, 2, 0 }, span.ToBigArray().ToArray());
+
+        int[] copy = new int[5];
+        span.CopyTo(copy);
+        Assert.Equal(values, copy);
+
+        int[] shortCopy = new int[4];
+        Assert.False(span.TryCopyTo(shortCopy));
+        Assert.True(span.TryCopyTo(copy));
+
+        BigArray<int> destinationArray = new(5);
+        span.CopyTo(destinationArray.AsBigSpan());
+        Assert.True(span.TryCopyTo(destinationArray.AsBigSpan()));
+        Assert.Equal(values, destinationArray.ToArray());
+
+        Assert.Throws<ArgumentException>(CopyBigSpanToShortSpan);
+        Assert.Throws<ArgumentException>(CopyBigSpanToShortBigSpan);
+
+        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(span.Split(2)));
+        Assert.Equal(new[] { 0, 0, 1, 0, 0 }, SegmentLengths(span.SplitAny(new[] { 0, 2 })));
+
+        byte[] byteValues = [0, 2, 1, 2, 0];
+        BigSpan<byte> byteSpan = byteValues;
+        SearchValues<byte> searchValues = SearchValues.Create((ReadOnlySpan<byte>)[2, 9]);
+        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(byteSpan.SplitAny(searchValues)));
+        Assert.Equal(1, byteSpan.IndexOfAny(searchValues));
+        Assert.Equal(3, byteSpan.LastIndexOfAny(searchValues));
+        Assert.True(byteSpan.ContainsAny(searchValues));
+        Assert.Equal(0, byteSpan.IndexOfAnyExcept(searchValues));
+        Assert.Equal(4, byteSpan.LastIndexOfAnyExcept(searchValues));
+        Assert.True(byteSpan.ContainsAnyExcept(searchValues));
+        Assert.Throws<ArgumentNullException>(IndexBigSpanOfNullSearchValues);
+
+        int[] sortable = [3, 1, 2];
+        ((BigSpan<int>)sortable.AsSpan()).Sort();
+        Assert.Equal(new[] { 1, 2, 3 }, sortable);
+
+        sortable = [1, 3, 2];
+        ((BigSpan<int>)sortable.AsSpan()).Sort(Comparer<int>.Create((left, right) => right.CompareTo(left)));
+        Assert.Equal(new[] { 3, 2, 1 }, sortable);
+
+        sortable = [2, 3, 1];
+        ((BigSpan<int>)sortable.AsSpan()).Sort((left, right) => left.CompareTo(right));
+        Assert.Equal(new[] { 1, 2, 3 }, sortable);
+        Assert.Throws<ArgumentNullException>(() => ((BigSpan<int>)sortable.AsSpan()).Sort((Comparison<int>)null!));
+
+        span.Clear();
+        Assert.Equal(new[] { 0, 0, 0, 0, 0 }, values);
+
+        span.Fill(4);
+        Assert.Equal(new[] { 4, 4, 4, 4, 4 }, values);
+    }
+
+    [Fact]
+    public unsafe void BigReadOnlySpan_CoreAndExtensionApis_Work()
+    {
+        Assert.True(BigReadOnlySpan<int>.Empty.IsEmpty);
+        Assert.Equal(0, BigReadOnlySpan<int>.Empty.Length);
+
+        int value = 42;
+        BigReadOnlySpan<int> single = new(ref value);
+        Assert.Equal(1, single.Length);
+        Assert.Equal(42, single[0]);
+        Assert.Equal(42, single.GetPinnableReference());
+
+        int[] values = [1, 2, 3, 2, 1];
+        BigReadOnlySpan<int> span = values;
+        Assert.False(span.IsEmpty);
+        Assert.Equal(5, span.Length);
+        Assert.Equal(new[] { 2, 3, 2, 1 }, ToArray(span.Slice(1)));
+        Assert.Equal(new[] { 2, 3 }, ToArray(span.Slice(1, 2)));
+        Assert.Throws<ArgumentOutOfRangeException>(SliceBigReadOnlySpanPastEnd);
+        Assert.Throws<ArgumentOutOfRangeException>(IndexBigReadOnlySpanPastEnd);
+
+        BigReadOnlySpan<int>.Enumerator enumerator = span.GetEnumerator();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(1, enumerator.Current);
+        enumerator.Reset();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(1, enumerator.Current);
+
+        fixed (int* pointer = values)
+        {
+            BigReadOnlySpan<int> pointerSpan = new(pointer, values.Length);
+            Assert.Equal(values, ToArray(pointerSpan));
+            Assert.Throws<ArgumentOutOfRangeException>(CreateBigReadOnlySpanWithNegativePointerLength);
+        }
+
+        Assert.Equal(values, span.ToArray());
+        Assert.Equal(values, span.ToBigArray().ToArray());
+        Assert.Equal(new[] { 2, 3, 2 }, span.ToSpan(1, 3).ToArray());
+
+        int[] destination = new int[5];
+        span.CopyTo(destination);
+        Assert.Equal(values, destination);
+        Assert.True(span.TryCopyTo(destination));
+        Assert.False(span.TryCopyTo(new int[4]));
+
+        BigArray<int> destinationArray = new(5);
+        span.CopyTo(destinationArray.AsBigSpan());
+        Assert.True(span.TryCopyTo(destinationArray.AsBigSpan()));
+        Assert.Equal(values, destinationArray.ToArray());
+        Assert.Throws<ArgumentException>(CopyBigReadOnlySpanToShortSpan);
+        Assert.Throws<ArgumentException>(CopyBigReadOnlySpanToShortBigSpan);
+
+        Assert.Equal(1, span.IndexOf(2));
+        Assert.Equal(3, span.LastIndexOf(2));
+        Assert.True(span.Contains(3));
+        Assert.Equal(2, span.BinarySearch(3));
+        Assert.Equal(2, span.BinarySearch(3, Comparer<int>.Default));
+        Assert.Equal(2, span.IndexOfAny((BigReadOnlySpan<int>)new[] { 3, 9 }));
+        Assert.Equal(2, span.LastIndexOfAny((BigReadOnlySpan<int>)new[] { 3, 9 }));
+        Assert.True(span.ContainsAny((BigReadOnlySpan<int>)new[] { 3, 9 }));
+        Assert.Equal(1, span.IndexOfAny(4, 2));
+        Assert.Equal(1, span.IndexOfAny(4, 2, 9));
+        Assert.Equal(3, span.LastIndexOfAny(4, 2));
+        Assert.Equal(3, span.LastIndexOfAny(4, 2, 9));
+        Assert.True(span.ContainsAny(4, 2));
+        Assert.True(span.ContainsAny(4, 2, 9));
+        Assert.Equal(0, span.IndexOfAnyExcept(2));
+        Assert.Equal(2, span.IndexOfAnyExcept(1, 2));
+        Assert.Equal(-1, span.IndexOfAnyExcept(1, 2, 3));
+        Assert.Equal(4, span.LastIndexOfAnyExcept(2));
+        Assert.Equal(2, span.LastIndexOfAnyExcept(1, 2));
+        Assert.Equal(-1, span.LastIndexOfAnyExcept(1, 2, 3));
+        Assert.True(span.ContainsAnyExcept(2));
+        Assert.True(span.ContainsAnyExcept((BigReadOnlySpan<int>)new[] { 1, 3 }));
+        Assert.True(span.ContainsAnyExcept(1, 2));
+        Assert.False(span.ContainsAnyExcept(1, 2, 3));
+        Assert.True(span.SequenceEqual((BigReadOnlySpan<int>)values));
+        Assert.True(span.SequenceCompareTo((BigReadOnlySpan<int>)new[] { 1, 2, 4 }) < 0);
+        Assert.True(span.StartsWith(new[] { 1, 2 }));
+        Assert.True(span.EndsWith(new[] { 2, 1 }));
+        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(span.Split(2)));
+        Assert.Equal(new[] { 0, 0, 1, 0, 0 }, SegmentLengths(span.SplitAny(new[] { 1, 2 })));
+        Assert.Equal(new[] { 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 3, 0 }).Trim(0)));
+        Assert.Equal(new[] { 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 2, 3, 2, 0 }).Trim(new[] { 0, 2 })));
+        Assert.Equal(new[] { 3, 0 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 3, 0 }).TrimStart(0)));
+        Assert.Equal(new[] { 3, 2, 0 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 2, 3, 2, 0 }).TrimStart(new[] { 0, 2 })));
+        Assert.Equal(new[] { 0, 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 3, 0 }).TrimEnd(0)));
+        Assert.Equal(new[] { 0, 2, 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 2, 3, 2, 0 }).TrimEnd(new[] { 0, 2 })));
+
+        byte[] byteValues = [1, 2, 3, 2, 1];
+        BigReadOnlySpan<byte> byteSpan = byteValues;
+        SearchValues<byte> searchValues = SearchValues.Create((ReadOnlySpan<byte>)[2, 9]);
+        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(byteSpan.SplitAny(searchValues)));
+        Assert.Equal(1, byteSpan.IndexOfAny(searchValues));
+        Assert.Equal(3, byteSpan.LastIndexOfAny(searchValues));
+        Assert.True(byteSpan.ContainsAny(searchValues));
+        Assert.Equal(0, byteSpan.IndexOfAnyExcept(searchValues));
+        Assert.Equal(4, byteSpan.LastIndexOfAnyExcept(searchValues));
+        Assert.True(byteSpan.ContainsAnyExcept(searchValues));
+        Assert.Throws<ArgumentNullException>(IndexBigReadOnlySpanOfNullSearchValues);
+
+        Assert.Equal(2, span.IndexOfAnyInRange(3, 4));
+        Assert.Equal(2, span.LastIndexOfAnyInRange(3, 4));
+        Assert.True(span.ContainsAnyInRange(3, 4));
+        Assert.Equal(0, span.IndexOfAnyExceptInRange(2, 3));
+        Assert.Equal(4, span.LastIndexOfAnyExceptInRange(2, 3));
+        Assert.True(span.ContainsAnyExceptInRange(2, 3));
+    }
+
+    [Fact]
+    public void MemoryMarshalExtensionApis_Work()
+    {
+        int value = 42;
+        BigSpan<int> span = MemoryMarshal.CreateBigSpan(ref value, 1);
+        Assert.Equal(1, span.Length);
+        Assert.Equal(42, MemoryMarshal.GetReference(span));
+
+        ref int writable = ref MemoryMarshal.GetReference(span);
+        writable = 43;
+        Assert.Equal(43, value);
+
+        BigReadOnlySpan<int> readOnlySpan = span;
+        Assert.Equal(43, MemoryMarshal.GetReference(readOnlySpan));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MemoryMarshal.CreateBigSpan(ref value, -1));
+    }
+
+    [Fact]
+    public void LargeLengthContract_IsExposedWithoutHugeAllocation()
+    {
+        Assert.True(BigArray<byte>.MaxLength > Array.MaxLength);
+
+        BigArray<byte> array = new(1024 * 1024);
+        nint highIndex = array.Length - 1;
+        array[highIndex] = 123;
+
+        Assert.Equal(123, array[highIndex]);
+        Assert.Equal(123, array.AsBigSpan(highIndex, 1)[0]);
+    }
+
+    private static T[] ToArray<T>(BigSpan<T> span)
+    {
+        T[] result = new T[(int)span.Length];
+        for (nint i = 0; i < span.Length; i++)
+        {
+            result[(int)i] = span[i];
+        }
+
+        return result;
+    }
+
+    private static T[] ToArray<T>(BigReadOnlySpan<T> span)
+    {
+        T[] result = new T[(int)span.Length];
+        for (nint i = 0; i < span.Length; i++)
+        {
+            result[(int)i] = span[i];
+        }
+
+        return result;
+    }
+
+    private static int[] SegmentLengths<T>(BigSpanSplitEnumerator<T> enumerator)
+    {
+        List<int> result = [];
+        while (enumerator.MoveNext())
+        {
+            result.Add((int)enumerator.Current.Length);
+        }
+
+        return [.. result];
+    }
+
+    private static int[] SegmentLengths<T>(BigSpanSearchValuesSplitEnumerator<T> enumerator)
+        where T : IEquatable<T>
+    {
+        List<int> result = [];
+        while (enumerator.MoveNext())
+        {
+            result.Add((int)enumerator.Current.Length);
+        }
+
+        return [.. result];
+    }
+
+    private static void SliceBigSpanPastEnd()
+    {
+        BigSpan<int> span = new int[] { 1, 2, 3, 4 };
+        span.Slice(5);
+    }
+
+    private static void IndexBigSpanPastEnd()
+    {
+        BigSpan<int> span = new int[] { 1, 2, 3, 4 };
+        _ = span[4];
+    }
+
+    private static unsafe void CreateBigSpanWithNegativePointerLength()
+    {
+        _ = new BigSpan<int>((int*)0, -1);
+    }
+
+    private static void CopyBigSpanToShortSpan()
+    {
+        BigSpan<int> span = new int[] { 0, 2, 1, 2, 0 };
+        span.CopyTo(new int[4]);
+    }
+
+    private static void CopyBigSpanToShortBigSpan()
+    {
+        BigSpan<int> span = new int[] { 0, 2, 1, 2, 0 };
+        span.CopyTo(new BigArray<int>(4).AsBigSpan());
+    }
+
+    private static void IndexBigSpanOfNullSearchValues()
+    {
+        BigSpan<int> span = new int[] { 0, 2, 1, 2, 0 };
+        span.IndexOfAny((SearchValues<int>)null!);
+    }
+
+    private static void SliceBigReadOnlySpanPastEnd()
+    {
+        BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
+        span.Slice(6);
+    }
+
+    private static void IndexBigReadOnlySpanPastEnd()
+    {
+        BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
+        _ = span[5];
+    }
+
+    private static unsafe void CreateBigReadOnlySpanWithNegativePointerLength()
+    {
+        _ = new BigReadOnlySpan<int>((int*)0, -1);
+    }
+
+    private static void CopyBigReadOnlySpanToShortSpan()
+    {
+        BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
+        span.CopyTo(new int[4]);
+    }
+
+    private static void CopyBigReadOnlySpanToShortBigSpan()
+    {
+        BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
+        span.CopyTo(new BigArray<int>(4).AsBigSpan());
+    }
+
+    private static void IndexBigReadOnlySpanOfNullSearchValues()
+    {
+        BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
+        span.IndexOfAny((SearchValues<int>)null!);
+    }
+}

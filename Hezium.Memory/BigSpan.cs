@@ -3,7 +3,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Hezium.Collections;
+namespace Hezium.Memory;
 
 /// <summary>
 /// Provides a type-safe view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
