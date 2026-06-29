@@ -1,6 +1,6 @@
 # Hezium.Memory
 
-`BigArray<T>`, `BigSpan<T>`, and `BigReadOnlySpan<T>` for .NET code that wants the `Array`/`Span` programming model with `nint` lengths and indexes.
+`BigArray<T>`, `BigMemory<T>`, `BigReadOnlyMemory<T>`, `BigSpan<T>`, and `BigReadOnlySpan<T>` for .NET code that wants the `Array`/`Memory`/`Span` programming model with `nint` lengths and indexes.
 
 The standard `T[]` and `Span<T>` APIs are excellent until the array you want to model is larger than the largest single managed array. `Hezium.Memory` keeps the surface area familiar: allocate an owner, take a span-like view, slice it, search it, copy it, sort it, and pass references around without inventing a second indexing style.
 
@@ -31,10 +31,12 @@ Some workloads are naturally one-dimensional and very large: columnar data, prec
 `Hezium.Memory` is built around that goal:
 
 - `BigArray<T>` is the owning storage type.
+- `BigMemory<T>` is the mutable storable view.
+- `BigReadOnlyMemory<T>` is the read-only storable view.
 - `BigSpan<T>` is the mutable stack-only view.
 - `BigReadOnlySpan<T>` is the read-only stack-only view.
 - Lengths, indexes, and offsets are `nint`.
-- APIs intentionally resemble `Array`, `Span<T>`, `ReadOnlySpan<T>`, and `MemoryMarshal`.
+- APIs intentionally resemble `Array`, `Memory<T>`, `ReadOnlyMemory<T>`, `Span<T>`, `ReadOnlySpan<T>`, and `MemoryMarshal`.
 
 ## BigArray
 
@@ -124,6 +126,48 @@ Console.WriteLine(first);
 Console.WriteLine(tail.Length);
 ```
 
+For text, take an explicit int-sized window before creating a string:
+
+```csharp
+BigReadOnlySpan<char> text = "hello".ToCharArray();
+string middle = text.Slice(1, 3).ToSpan(0, 3).ToString();
+
+Console.WriteLine(middle); // ell
+```
+
+## BigMemory
+
+`BigMemory<T>` and `BigReadOnlyMemory<T>` mirror the storable `Memory<T>`/`ReadOnlyMemory<T>` shape with `nint` lengths. They can be sliced, copied, pinned, converted to arrays, and materialized as big spans when you need the hot by-ref path.
+
+```csharp
+using Hezium.Memory;
+
+BigArray<int> owner = new(1024);
+BigMemory<int> memory = owner.AsBigMemory(128, 256);
+
+memory.Span.Fill(7);
+
+BigMemory<int> tail = memory.Slice(128);
+BigReadOnlyMemory<int> readOnly = memory;
+
+Console.WriteLine(tail.Length);
+Console.WriteLine(readOnly.Span[0]);
+```
+
+Normal arrays and array segments convert to big memory without copying:
+
+```csharp
+int[] small = [1, 2, 3, 4];
+
+BigMemory<int> memory = small;
+BigReadOnlyMemory<int> window = new ArraySegment<int>(small, 1, 2);
+
+memory.Span[2] = 30;
+
+Console.WriteLine(window.Span[1]); // 30
+Console.WriteLine(small[2]); // 30
+```
+
 ## Span-Like Operations
 
 The extension methods follow the `Span<T>` vocabulary, but return `nint` where an index can be large.
@@ -144,7 +188,7 @@ bool startsWith = span.StartsWith(new[] { 0, 1 });
 Console.WriteLine($"{firstTwo}, {lastTwo}, {startsWith}");
 ```
 
-Copying works between big spans, normal spans, and `BigArray<T>`:
+Copying works between big memory, big spans, normal spans, and `BigArray<T>`:
 
 ```csharp
 BigArray<int> source = new(4);
@@ -155,6 +199,10 @@ source.CopyTo(destination, destinationIndex: 2);
 
 int[] small = new int[4];
 source.AsBigSpan().CopyTo(small);
+
+BigMemory<int> memory = source.AsBigMemory();
+BigMemory<int> memoryDestination = destination.AsBigMemory(2, 4);
+memory.CopyTo(memoryDestination);
 ```
 
 Search, trim, split, compare, and sort operations are available where the underlying .NET span APIs support them:
@@ -215,7 +263,9 @@ Console.WriteLine(readOnlyReference); // 43
 
 | Type | Purpose |
 | --- | --- |
-| `BigArray<T>` | Owning storage with `nint Length`, `MaxLength`, indexer, enumeration, `AsBigSpan`, and `AsSpan` for int-sized windows. |
+| `BigArray<T>` | Owning storage with `nint Length`, `MaxLength`, indexer, enumeration, `AsBigSpan`, `AsBigMemory`, and `AsSpan` for int-sized windows. |
+| `BigMemory<T>` | Mutable storable view with `nint Length`, slicing, `Span`, copy/try-copy, pinning, `ToArray`, and `ToBigArray`. |
+| `BigReadOnlyMemory<T>` | Read-only storable view with `nint Length`, slicing, `Span`, copy/try-copy, pinning, `ToArray`, and `ToBigArray`. |
 | `BigSpan<T>` | Mutable `ref struct` view with `nint Length`, slicing, by-ref indexing, pinning, enumeration, copy/search/trim/split/sort helpers. |
 | `BigReadOnlySpan<T>` | Read-only `ref struct` view with slicing, by-readonly-ref indexing, pinning, enumeration, copy/search/trim/split helpers. |
 | `MemoryMarshal` extensions | `CreateBigSpan`, `GetReference(BigSpan<T>)`, and `GetReference(BigReadOnlySpan<T>)`. |
@@ -226,6 +276,7 @@ Console.WriteLine(readOnlyReference); // 43
 
 ## Notes
 
+- `BigMemory<T>` and `BigReadOnlyMemory<T>` are regular structs that can be stored; their `Span` properties produce stack-only big span views.
 - `BigSpan<T>` and `BigReadOnlySpan<T>` are `ref struct` types, so they follow the same stack-only lifetime rules as `Span<T>`.
 - `ToArray()` requires the span or array to fit into a single `T[]`; use `ToBigArray()` when the result may exceed `Array.MaxLength`.
 - `BigArray<T>.MaxLength` is element-size dependent.

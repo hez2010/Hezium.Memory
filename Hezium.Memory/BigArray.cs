@@ -30,24 +30,34 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigArray(nint length)
     {
-        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be non-negative.");
-        if (length > MaxLength) throw new ArgumentOutOfRangeException(nameof(length), $"Length must be less than or equal to {MaxLength}.");
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaxLength);
+
         if (length <= Array.MaxLength) _storage = new ElementChunk1[length];
         else _storage = CreateBigArraySlow(length);
         _length = length;
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="BigArray{T}"/> class that wraps the specified array.
+    /// Initializes a new instance of the <see cref="BigArray{T}"/> class with a given array.
     /// </summary>
     /// <param name="array">The array to wrap.</param>
+    /// <param name="copy">Whether to copy the array or wrap it directly.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
-    public BigArray(T[] array)
+    public BigArray(T[] array, bool copy = true)
     {
-        if (array is null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
+
         _length = array.Length;
-        _storage = new ElementChunk1[array.Length];
-        array.CopyTo(_storage, 0);
+        if (copy)
+        {
+            _storage = new ElementChunk1[array.Length];
+            array.CopyTo(_storage, 0);
+        }
+        else
+        {
+            _storage = array;
+        }
     }
 
     /// <summary>
@@ -76,22 +86,23 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            if ((nuint)index >= (nuint)_length) ThrowOutOfRangeException(index);
+            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _length - 1);
+
             return ref Unsafe.Add(ref GetDataReference(), index);
         }
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    [DoesNotReturn]
-    internal static void ThrowOutOfRangeException(nint index)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref T GetDataReference(Array storage)
     {
-        throw new ArgumentOutOfRangeException(nameof(index), $"Index {index} is out of range.");
+        return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(storage));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ref T GetDataReference()
     {
-        return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(_storage));
+        return ref GetDataReference(_storage);
     }
 
     /// <summary>
@@ -157,6 +168,41 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     }
 
     /// <summary>
+    /// Creates a <see cref="BigMemory{T}"/> over the entire array.
+    /// </summary>
+    /// <returns>A <see cref="BigMemory{T}"/> over the array.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public BigMemory<T> AsBigMemory()
+    {
+        return new BigMemory<T>(_storage, 0, _length);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="BigMemory{T}"/> over a range of the array that starts at the specified index.
+    /// </summary>
+    /// <param name="start">The zero-based index at which the memory starts.</param>
+    /// <returns>A <see cref="BigMemory{T}"/> over the specified range.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="start"/> is outside the bounds of the array.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public BigMemory<T> AsBigMemory(nint start)
+    {
+        return AsBigMemory().Slice(start);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="BigMemory{T}"/> over a range of the array that starts at the specified index and has the specified length.
+    /// </summary>
+    /// <param name="start">The zero-based index at which the memory starts.</param>
+    /// <param name="length">The number of elements in the memory.</param>
+    /// <returns>A <see cref="BigMemory{T}"/> over the specified range.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of the array.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public BigMemory<T> AsBigMemory(nint start, nint length)
+    {
+        return AsBigMemory().Slice(start, length);
+    }
+
+    /// <summary>
     /// Creates a <see cref="Span{T}"/> over a range of the array that starts at the specified index and has the specified length.
     /// </summary>
     /// <param name="start">The zero-based index at which the span starts.</param>
@@ -166,7 +212,10 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<T> AsSpan(nint start, int length)
     {
-        if ((nuint)start > (nuint)_length || (nuint)(nint)length > (nuint)(_length - start)) ThrowOutOfRangeException(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+
         return MemoryMarshal.CreateSpan(ref Unsafe.Add(ref GetDataReference(), start), length);
     }
 }

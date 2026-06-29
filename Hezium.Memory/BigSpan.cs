@@ -50,18 +50,50 @@ public readonly ref struct BigSpan<T>
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a portion of the <see cref="BigArray{T}"/>.
+    /// </summary>
+    /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
+    /// <param name="start">The starting index of the span.</param>
+    /// <param name="length">The number of elements in the span.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the start or length is out of range.</exception>
+    public BigSpan(BigArray<T> array, nint start, nint length)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+
+        _first = ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage)), start);
+        _length = length;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a contiguous region of memory.
     /// </summary>
     /// <param name="array">The array to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
     public BigSpan(T[] array)
     {
-        if (array is null)
-        {
-            throw new ArgumentNullException(nameof(array));
-        }
+        ArgumentNullException.ThrowIfNull(array);
         _first = ref MemoryMarshal.GetArrayDataReference(array);
         _length = array.Length;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a contiguous region of memory.
+    /// </summary>
+    /// <param name="array">The array to represent.</param>
+    /// <param name="start">The starting index of the span.</param>
+    /// <param name="length">The number of elements in the span.</param>
+    public BigSpan(T[] array, int start, int length)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+
+        _first = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), start);
+        _length = length;
     }
 
     /// <summary>
@@ -98,7 +130,9 @@ public readonly ref struct BigSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpan<T> Slice(nint start)
     {
-        if ((nuint)start > (nuint)_length) BigArray<T>.ThrowOutOfRangeException(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(start, _length);
+
         return new BigSpan<T>(ref Unsafe.Add(ref _first, start), _length - start);
     }
 
@@ -111,7 +145,10 @@ public readonly ref struct BigSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpan<T> Slice(nint start, nint length)
     {
-        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) BigArray<T>.ThrowOutOfRangeException(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+
         return new BigSpan<T>(ref Unsafe.Add(ref _first, start), length);
     }
 
@@ -125,7 +162,9 @@ public readonly ref struct BigSpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            if ((nuint)index >= (nuint)_length) BigArray<T>.ThrowOutOfRangeException(index);
+            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _length - 1);
+
             return ref Unsafe.Add(ref _first, index);
         }
     }
@@ -262,7 +301,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
     public BigReadOnlySpan(T[] array)
     {
-        if (array is null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         _first = ref MemoryMarshal.GetArrayDataReference(array);
         _length = array.Length;
     }
@@ -277,7 +316,7 @@ public readonly ref struct BigReadOnlySpan<T>
     public unsafe BigReadOnlySpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
-        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be non-negative.");
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
         _first = ref Unsafe.AsRef<T>(pointer);
         _length = length;
     }
@@ -314,7 +353,9 @@ public readonly ref struct BigReadOnlySpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigReadOnlySpan<T> Slice(nint start)
     {
-        if ((nuint)start > (nuint)_length) BigArray<T>.ThrowOutOfRangeException(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(start, _length);
+
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in _first), start), _length - start);
     }
 
@@ -327,7 +368,10 @@ public readonly ref struct BigReadOnlySpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigReadOnlySpan<T> Slice(nint start, nint length)
     {
-        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) BigArray<T>.ThrowOutOfRangeException(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in _first), start), length);
     }
 
@@ -341,7 +385,9 @@ public readonly ref struct BigReadOnlySpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            if ((nuint)index >= (nuint)_length) BigArray<T>.ThrowOutOfRangeException(index);
+            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _length - 1);
+
             return ref Unsafe.Add(ref Unsafe.AsRef(in _first), index);
         }
     }

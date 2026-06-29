@@ -352,6 +352,165 @@ public sealed class HeziumMemoryApiTests
     }
 
     [Fact]
+    public unsafe void BigMemory_CoreApis_Work()
+    {
+        Assert.True(BigMemory<int>.Empty.IsEmpty);
+        Assert.Equal(0, BigMemory<int>.Empty.Length);
+
+        BigMemory<int> nullMemory = new((int[]?)null);
+        Assert.True(nullMemory.IsEmpty);
+        Assert.Equal(0, nullMemory.Length);
+        _ = new BigMemory<int>((int[]?)null, 0, 0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BigMemory<int>((int[]?)null, 1, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BigMemory<int>(new int[1], 0, 2));
+
+        int[] values = [1, 2, 3, 4, 5];
+        BigMemory<int> memory = values;
+        Assert.False(memory.IsEmpty);
+        Assert.Equal(5, memory.Length);
+        Assert.Equal(new[] { 2, 3, 4 }, memory.Slice(1, 3).ToArray());
+        Assert.Equal(new[] { 3, 4, 5 }, memory.Slice(2).ToArray());
+        Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(6));
+        Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(4, 2));
+
+        memory.Span[2] = 30;
+        Assert.Equal(30, values[2]);
+
+        BigMemory<int> segmentMemory = new ArraySegment<int>(values, 1, 3);
+        Assert.Equal(new[] { 2, 30, 4 }, segmentMemory.ToArray());
+
+        BigArray<int> owner = new(5);
+        for (nint i = 0; i < owner.Length; i++)
+        {
+            owner[i] = (int)(i + 1);
+        }
+
+        BigMemory<int> ownerMemory = owner.AsBigMemory(1, 3);
+        Assert.Equal(new[] { 2, 3, 4 }, ownerMemory.ToArray());
+        ownerMemory.Span[1] = 42;
+        Assert.Equal(42, owner[2]);
+        Assert.Equal(new[] { 2, 42, 4 }, ((BigReadOnlyMemory<int>)owner.AsBigMemory(1, 3)).ToArray());
+
+        BigMemory<int> destination = new int[5];
+        memory.CopyTo(destination);
+        Assert.Equal(values, destination.ToArray());
+        Assert.True(memory.TryCopyTo(destination));
+        Assert.False(memory.TryCopyTo(new int[4]));
+        Assert.Throws<ArgumentException>(() => memory.CopyTo(new int[4]));
+        Assert.Equal(values, memory.ToBigArray().ToArray());
+
+        BigReadOnlyMemory<int> readOnly = memory;
+        Assert.Equal(values, readOnly.ToArray());
+        Assert.True(memory.Equals(new BigMemory<int>(values)));
+        Assert.True(memory.Equals((object)new BigMemory<int>(values)));
+        Assert.False(memory.Equals(new BigMemory<int>(values, 1, 4)));
+        Assert.Equal(memory.GetHashCode(), new BigMemory<int>(values).GetHashCode());
+
+        int[] pinnedValues = [1, 2, 3];
+        BigMemory<int> pinnedMemory = new(pinnedValues, 1, 1);
+        using (MemoryHandle handle = pinnedMemory.Pin())
+        {
+            *(int*)handle.Pointer = 99;
+        }
+
+        Assert.Equal(99, pinnedValues[1]);
+
+        BigArray<int> pinnedOwner = new(2);
+        using (MemoryHandle handle = pinnedOwner.AsBigMemory(1, 1).Pin())
+        {
+            *(int*)handle.Pointer = 77;
+        }
+
+        Assert.Equal(77, pinnedOwner[1]);
+
+        using (BigMemory<string>.Empty.Pin())
+        {
+        }
+
+        Assert.Throws<ArgumentException>(() => new BigMemory<string>(["value"]).Pin());
+        Assert.Throws<ArgumentException>(() => new BigMemory<string>(["value"], 1, 0).Pin());
+    }
+
+    [Fact]
+    public unsafe void BigReadOnlyMemory_CoreApis_Work()
+    {
+        Assert.True(BigReadOnlyMemory<int>.Empty.IsEmpty);
+        Assert.Equal(0, BigReadOnlyMemory<int>.Empty.Length);
+
+        BigReadOnlyMemory<int> nullMemory = new((int[]?)null);
+        Assert.True(nullMemory.IsEmpty);
+        Assert.Equal(0, nullMemory.Length);
+        _ = new BigReadOnlyMemory<int>((int[]?)null, 0, 0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BigReadOnlyMemory<int>((int[]?)null, 1, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BigReadOnlyMemory<int>(new int[1], 0, 2));
+
+        int[] values = [1, 2, 3, 4, 5];
+        BigReadOnlyMemory<int> memory = values;
+        Assert.False(memory.IsEmpty);
+        Assert.Equal(5, memory.Length);
+        Assert.Equal(new[] { 2, 3, 4 }, memory.Slice(1, 3).ToArray());
+        Assert.Equal(new[] { 3, 4, 5 }, memory.Slice(2).ToArray());
+        Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(6));
+        Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(4, 2));
+
+        BigReadOnlyMemory<int> segmentMemory = new ArraySegment<int>(values, 1, 3);
+        Assert.Equal(new[] { 2, 3, 4 }, segmentMemory.ToArray());
+
+        BigArray<int> owner = new(5);
+        for (nint i = 0; i < owner.Length; i++)
+        {
+            owner[i] = (int)(i + 1);
+        }
+
+        BigReadOnlyMemory<int> ownerMemory = new(owner, 1, 3);
+        Assert.Equal(new[] { 2, 3, 4 }, ownerMemory.ToArray());
+        Assert.Equal(new[] { 2, 3, 4 }, new BigReadOnlyMemory<int>(owner, 1, 3).ToArray());
+
+        BigMemory<int> destination = new int[5];
+        memory.CopyTo(destination);
+        Assert.Equal(values, destination.ToArray());
+        Assert.True(memory.TryCopyTo(destination));
+        Assert.False(memory.TryCopyTo(new int[4]));
+        Assert.Throws<ArgumentException>(() => memory.CopyTo(new int[4]));
+        Assert.Equal(values, memory.ToBigArray().ToArray());
+
+        Assert.True(memory.Equals(new BigReadOnlyMemory<int>(values)));
+        Assert.True(memory.Equals((object)new BigReadOnlyMemory<int>(values)));
+        Assert.False(memory.Equals(new BigReadOnlyMemory<int>(values, 1, 4)));
+        Assert.Equal(memory.GetHashCode(), new BigReadOnlyMemory<int>(values).GetHashCode());
+
+        int[] pinnedValues = [1, 2, 3];
+        BigReadOnlyMemory<int> pinnedMemory = new(pinnedValues, 1, 1);
+        using (MemoryHandle handle = pinnedMemory.Pin())
+        {
+            Assert.Equal(2, *(int*)handle.Pointer);
+        }
+
+        Assert.Throws<ArgumentException>(() => new BigReadOnlyMemory<string>(["value"]).Pin());
+        Assert.Throws<ArgumentException>(() => new BigReadOnlyMemory<string>(["value"], 1, 0).Pin());
+    }
+
+    [Fact]
+    public void BigCharMemoryAndSpan_TextRequiresSmallSpanWindow()
+    {
+        char[] chars = "hello".ToCharArray();
+
+        BigSpan<char> span = chars;
+        Assert.Equal("hello", span.ToSpan(0, 5).ToString());
+        Assert.Equal("ell", span.Slice(1, 3).ToSpan(0, 3).ToString());
+
+        BigReadOnlySpan<char> readOnlySpan = chars;
+        Assert.Equal("hello", readOnlySpan.ToSpan(0, 5).ToString());
+        Assert.Equal("ell", readOnlySpan.Slice(1, 3).ToSpan(0, 3).ToString());
+
+        BigMemory<char> memory = chars;
+        Assert.Equal("ell", memory.Slice(1, 3).Span.ToSpan(0, 3).ToString());
+
+        BigReadOnlyMemory<char> readOnlyMemory = chars;
+        Assert.Equal("ell", readOnlyMemory.Slice(1, 3).Span.ToSpan(0, 3).ToString());
+    }
+
+    [Fact]
     public void MemoryMarshalExtensionApis_Work()
     {
         int value = 42;

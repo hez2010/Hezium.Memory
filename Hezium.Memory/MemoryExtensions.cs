@@ -22,7 +22,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative.</exception>
         public static BigSpan<T> CreateBigSpan<T>(ref T first, nint length)
         {
-            if (length < 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be non-negative.");
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
             return new BigSpan<T>(ref first, length);
         }
 
@@ -47,13 +47,6 @@ public static class MemoryExtensions
         {
             return ref span._first;
         }
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    [DoesNotReturn]
-    private static void ThrowArgumentException(string message, string paramName)
-    {
-        throw new ArgumentException(message, paramName);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -154,11 +147,7 @@ public static class MemoryExtensions
 
     private static T[] ToArrayCore<T>(BigReadOnlySpan<T> span)
     {
-        if (span._length > Array.MaxLength)
-        {
-            throw new InvalidOperationException("The span is too large to copy into a single array.");
-        }
-
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(span._length, Array.MaxLength);
         T[] result = new T[(int)span._length];
         CopyToCore(span, result);
         return result;
@@ -1317,7 +1306,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(BigSpan<T> destination)
         {
-            if (span._length > destination._length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(span._length, destination._length);
             CopyToCore(AsReadOnlySpan(span), destination);
         }
 
@@ -1328,7 +1317,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(Span<T> destination)
         {
-            if (span._length > destination.Length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(span._length, destination.Length);
             CopyToCore(AsReadOnlySpan(span), destination);
         }
 
@@ -1384,7 +1373,10 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of the span.</exception>
         public Span<T> ToSpan(nint start, int length)
         {
-            if ((nuint)start > (nuint)span._length || (nuint)(nint)length > (nuint)(span._length - start)) BigArray<T>.ThrowOutOfRangeException(start);
+            ArgumentOutOfRangeException.ThrowIfNegative(start);
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(length, span._length - start);
+
             return CreateSpan(SliceUnchecked(span, start, length), length);
         }
 
@@ -1866,7 +1858,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(BigSpan<T> destination)
         {
-            if (span._length > destination._length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(span._length, destination._length);
             CopyToCore(span, destination);
         }
 
@@ -1877,7 +1869,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(Span<T> destination)
         {
-            if (span._length > destination.Length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(span._length, destination.Length);
             CopyToCore(span, destination);
         }
 
@@ -1933,7 +1925,10 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of the span.</exception>
         public ReadOnlySpan<T> ToSpan(nint start, int length)
         {
-            if ((nuint)start > (nuint)span._length || (nuint)(nint)length > (nuint)(span._length - start)) BigArray<T>.ThrowOutOfRangeException(start);
+            ArgumentOutOfRangeException.ThrowIfNegative(start);
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(length, span._length - start);
+
             return CreateReadOnlySpan(SliceUnchecked(span, start, length), length);
         }
 
