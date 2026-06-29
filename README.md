@@ -1,5 +1,7 @@
 # Hezium.Memory
 
+![NuGet Version](https://img.shields.io/nuget/v/Hezium.Memory)
+
 `BigArray<T>`, `BigMemory<T>`, `BigReadOnlyMemory<T>`, `BigSpan<T>`, and `BigReadOnlySpan<T>` for .NET code that wants the `Array`/`Memory`/`Span` programming model with `nint` lengths and indexes.
 
 The standard `T[]` and `Span<T>` APIs are excellent until the array you want to model is larger than the largest single managed array. `Hezium.Memory` keeps the surface area familiar: allocate an owner, take a span-like view, slice it, search it, copy it, sort it, and pass references around without inventing a second indexing style.
@@ -23,6 +25,8 @@ BigSpan<byte> window = buffer.AsBigSpan(5_000_000_000, 1024);
 window[0] = 42;
 Console.WriteLine(buffer[5_000_000_000]); // 42
 ```
+
+`BigArray<T>` allocates on managed memory with GC support, so you can use it with reference types and it will be collected when no longer being used.
 
 ## Why
 
