@@ -50,7 +50,9 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaxLength);
 
         Array storage = length <= Array.MaxLength
-            ? AllocateStorage<ElementChunk1<T>>((int)length, pinned, uninitialized)
+            ? uninitialized
+                ? GC.AllocateUninitializedArray<ElementChunk1<T>>((int)length, pinned)
+                : GC.AllocateArray<ElementChunk1<T>>((int)length, pinned)
             : CreateBigArraySlow(length, pinned, uninitialized);
 
         return new BigArray<T>(storage, length);

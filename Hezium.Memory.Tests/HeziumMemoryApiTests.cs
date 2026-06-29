@@ -607,6 +607,11 @@ public sealed class HeziumMemoryApiTests
             Assert.True(chunkLength == 1 || IsPrime(chunkLength));
         }
 
+        MethodInfo createReferenceFactory = typeof(BigArray<object>).GetMethod("CreateBigArrayFactory", BindingFlags.NonPublic | BindingFlags.Static, [typeof(int)])!;
+        var referenceFactory = (Func<int, bool, bool, Array>)createReferenceFactory.Invoke(null, [65535 / Unsafe.SizeOf<object>()])!;
+
+        Assert.Empty(referenceFactory(0, false, false));
+
         static bool IsPrime(int value)
         {
             for (int divisor = 2; divisor * divisor <= value; divisor++)
