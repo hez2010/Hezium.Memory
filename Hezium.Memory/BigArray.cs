@@ -38,6 +38,19 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="BigArray{T}"/> class that wraps the specified array.
+    /// </summary>
+    /// <param name="array">The array to wrap.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
+    public BigArray(T[] array)
+    {
+        if (array is null) throw new ArgumentNullException(nameof(array));
+        _length = array.Length;
+        _storage = new ElementChunk1[array.Length];
+        array.CopyTo(_storage, 0);
+    }
+
+    /// <summary>
     /// Gets an empty <see cref="BigArray{T}"/>.
     /// </summary>
     public static BigArray<T> Empty { get; } = new(0);

@@ -50,6 +50,21 @@ public readonly ref struct BigSpan<T>
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a contiguous region of memory.
+    /// </summary>
+    /// <param name="array">The array to represent.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
+    public BigSpan(T[] array)
+    {
+        if (array is null)
+        {
+            throw new ArgumentNullException(nameof(array));
+        }
+        _first = ref MemoryMarshal.GetArrayDataReference(array);
+        _length = array.Length;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a span of memory starting at the specified pointer and with the specified length.
     /// </summary>
     /// <param name="pointer">A pointer to the first element in the span.</param>
@@ -238,6 +253,18 @@ public readonly ref struct BigReadOnlySpan<T>
     {
         _first = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage));
         _length = array._length;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a contiguous region of memory.
+    /// </summary>
+    /// <param name="array">The array to represent.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
+    public BigReadOnlySpan(T[] array)
+    {
+        if (array is null) throw new ArgumentNullException(nameof(array));
+        _first = ref MemoryMarshal.GetArrayDataReference(array);
+        _length = array.Length;
     }
 
     /// <summary>
