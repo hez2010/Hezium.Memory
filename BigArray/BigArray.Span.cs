@@ -4,10 +4,29 @@ using System.Runtime.InteropServices;
 
 namespace Hezium.Collections;
 
+/// <summary>
+/// Provides a type-safe view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
+/// </summary>
+/// <typeparam name="T">The type of elements in the span.</typeparam>
 public readonly ref struct BigSpan<T>
 {
     internal readonly ref T _first;
     internal readonly nint _length;
+
+    /// <summary>
+    /// Gets an empty <see cref="BigSpan{T}"/>.
+    /// </summary>
+    public static BigSpan<T> Empty => default;
+
+    /// <summary>
+    /// Gets the number of elements in the span.
+    /// </summary>
+    public nint Length => _length;
+
+    /// <summary>
+    /// Gets a value that indicates whether the span is empty.
+    /// </summary>
+    public bool IsEmpty => _length == 0;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a single element.
@@ -60,9 +79,10 @@ public readonly ref struct BigSpan<T>
     /// </summary>
     /// <param name="start">The index at which to start the slice.</param>
     /// <returns>A new <see cref="BigSpan{T}"/> that represents the specified slice of the current span.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpan<T> Slice(nint start)
     {
-        if (start < 0 || start > _length) BigArray<T>.ThrowOutOfRangeException(start);
+        if ((nuint)start > (nuint)_length) BigArray<T>.ThrowOutOfRangeException(start);
         return new BigSpan<T>(ref Unsafe.Add(ref _first, start), _length - start);
     }
 
@@ -72,9 +92,10 @@ public readonly ref struct BigSpan<T>
     /// <param name="start">The index at which to start the slice.</param>
     /// <param name="length">The number of elements in the slice.</param>
     /// <returns>A new <see cref="BigSpan{T}"/> that represents the specified slice of the current span.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpan<T> Slice(nint start, nint length)
     {
-        if (start < 0 || length < 0 || start > _length || length > _length - start) BigArray<T>.ThrowOutOfRangeException(start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) BigArray<T>.ThrowOutOfRangeException(start);
         return new BigSpan<T>(ref Unsafe.Add(ref _first, start), length);
     }
 
@@ -88,9 +109,19 @@ public readonly ref struct BigSpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            if (index < 0 || index >= _length) BigArray<T>.ThrowOutOfRangeException(index);
+            if ((nuint)index >= (nuint)_length) BigArray<T>.ThrowOutOfRangeException(index);
             return ref Unsafe.Add(ref _first, index);
         }
+    }
+
+    /// <summary>
+    /// Gets a reference to the element that can be used for pinning.
+    /// </summary>
+    /// <returns>A reference to the first element of the span.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T GetPinnableReference()
+    {
+        return ref _first;
     }
 
     /// <summary>
@@ -155,10 +186,29 @@ public readonly ref struct BigSpan<T>
     }
 }
 
+/// <summary>
+/// Provides a type-safe read-only view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
+/// </summary>
+/// <typeparam name="T">The type of elements in the span.</typeparam>
 public readonly ref struct BigReadOnlySpan<T>
 {
     internal readonly ref readonly T _first;
     internal readonly nint _length;
+
+    /// <summary>
+    /// Gets an empty <see cref="BigReadOnlySpan{T}"/>.
+    /// </summary>
+    public static BigReadOnlySpan<T> Empty => default;
+
+    /// <summary>
+    /// Gets the number of elements in the span.
+    /// </summary>
+    public nint Length => _length;
+
+    /// <summary>
+    /// Gets a value that indicates whether the span is empty.
+    /// </summary>
+    public bool IsEmpty => _length == 0;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a single element.
@@ -206,9 +256,10 @@ public readonly ref struct BigReadOnlySpan<T>
     /// </summary>
     /// <param name="start">The index at which to start the slice.</param>
     /// <returns>A new <see cref="BigReadOnlySpan{T}"/> that represents the specified slice.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigReadOnlySpan<T> Slice(nint start)
     {
-        if (start < 0 || start > _length) BigArray<T>.ThrowOutOfRangeException(start);
+        if ((nuint)start > (nuint)_length) BigArray<T>.ThrowOutOfRangeException(start);
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in _first), start), _length - start);
     }
 
@@ -218,9 +269,10 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="start">The index at which to start the slice.</param>
     /// <param name="length">The number of elements in the slice.</param>
     /// <returns>A new <see cref="BigReadOnlySpan{T}"/> that represents the specified slice.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigReadOnlySpan<T> Slice(nint start, nint length)
     {
-        if (start < 0 || length < 0 || start > _length || length > _length - start) BigArray<T>.ThrowOutOfRangeException(start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) BigArray<T>.ThrowOutOfRangeException(start);
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in _first), start), length);
     }
 
@@ -234,9 +286,19 @@ public readonly ref struct BigReadOnlySpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            if (index < 0 || index >= _length) BigArray<T>.ThrowOutOfRangeException(index);
+            if ((nuint)index >= (nuint)_length) BigArray<T>.ThrowOutOfRangeException(index);
             return ref Unsafe.Add(ref Unsafe.AsRef(in _first), index);
         }
+    }
+
+    /// <summary>
+    /// Gets a read-only reference to the element that can be used for pinning.
+    /// </summary>
+    /// <returns>A read-only reference to the first element of the span.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref readonly T GetPinnableReference()
+    {
+        return ref _first;
     }
 
     /// <summary>
@@ -249,7 +311,7 @@ public readonly ref struct BigReadOnlySpan<T>
     }
 
     /// <summary>
-    /// Defines an implicit conversion from <see cref="BigReadOnlySpan{T}"/> to <see cref="BigSpan{T}"/>.
+    /// Enumerates the elements of a <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
     public ref struct Enumerator : IEnumerator<T>
     {

@@ -1,9 +1,12 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Hezium.Collections;
 
+/// <summary>
+/// Provides extension methods for <see cref="BigArray{T}"/>, <see cref="BigSpan{T}"/>, <see cref="BigReadOnlySpan{T}"/>, and <see cref="MemoryMarshal"/>.
+/// </summary>
 public static class BigArrayExtensions
 {
     extension(MemoryMarshal)
@@ -15,6 +18,7 @@ public static class BigArrayExtensions
         /// <param name="first">A reference to the first element of the span.</param>
         /// <param name="length">The number of elements in the span.</param>
         /// <returns>A <see cref="BigSpan{T}"/> that represents the specified range of elements.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative.</exception>
         public static BigSpan<T> CreateBigSpan<T>(ref T first, nint length)
         {
             if (length < 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be non-negative.");
@@ -51,107 +55,660 @@ public static class BigArrayExtensions
         throw new ArgumentException(message, paramName);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static BigReadOnlySpan<T> AsReadOnlySpan<T>(BigSpan<T> span)
+    {
+        return new BigReadOnlySpan<T>(ref span._first, span._length);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Span<T> CreateSpan<T>(BigSpan<T> span, int length)
+    {
+        return MemoryMarshal.CreateSpan(ref span._first, length);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ReadOnlySpan<T> CreateReadOnlySpan<T>(BigReadOnlySpan<T> span, int length)
+    {
+        return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in span._first), length);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int GetChunkLength(nint remaining)
+    {
+        return remaining > Array.MaxLength ? Array.MaxLength : (int)remaining;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static BigSpan<T> SliceUnchecked<T>(BigSpan<T> span, nint start, nint length)
+    {
+        return new BigSpan<T>(ref Unsafe.Add(ref span._first, start), length);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static BigReadOnlySpan<T> SliceUnchecked<T>(BigReadOnlySpan<T> span, nint start, nint length)
+    {
+        return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in span._first), start), length);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static BigSpan<T> SliceUnchecked<T>(BigSpan<T> span, nint start)
+    {
+        return SliceUnchecked(span, start, span._length - start);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static BigReadOnlySpan<T> SliceUnchecked<T>(BigReadOnlySpan<T> span, nint start)
+    {
+        return SliceUnchecked(span, start, span._length - start);
+    }
+
+    private static bool Overlaps<T>(BigReadOnlySpan<T> source, BigSpan<T> destination, out nint elementOffset)
+    {
+        ref T sourceReference = ref Unsafe.AsRef(in source._first);
+        nint byteOffset = Unsafe.ByteOffset(ref sourceReference, ref destination._first);
+        nint elementSize = Unsafe.SizeOf<T>();
+        if (byteOffset % elementSize != 0)
+        {
+            elementOffset = 0;
+            return false;
+        }
+
+        elementOffset = byteOffset / elementSize;
+        return elementOffset < source._length && elementOffset > -destination._length;
+    }
+
+    private static void CopyToCore<T>(BigReadOnlySpan<T> source, BigSpan<T> destination)
+    {
+        if (source._length == 0) return;
+
+        if (Overlaps(source, destination, out nint elementOffset) && elementOffset > 0)
+        {
+            nint remaining = source._length;
+            while (remaining > 0)
+            {
+                int chunkLength = GetChunkLength(remaining);
+                nint chunkStart = remaining - chunkLength;
+                CreateReadOnlySpan(SliceUnchecked(source, chunkStart, chunkLength), chunkLength).CopyTo(CreateSpan(SliceUnchecked(destination, chunkStart, chunkLength), chunkLength));
+                remaining = chunkStart;
+            }
+
+            return;
+        }
+
+        while (source._length > 0)
+        {
+            int chunkLength = GetChunkLength(source._length);
+            CreateReadOnlySpan(source, chunkLength).CopyTo(CreateSpan(destination, chunkLength));
+            source = SliceUnchecked(source, chunkLength);
+            destination = SliceUnchecked(destination, chunkLength);
+        }
+    }
+
+    private static void CopyToCore<T>(BigReadOnlySpan<T> source, Span<T> destination)
+    {
+        if (source._length == 0) return;
+        CreateReadOnlySpan(source, (int)source._length).CopyTo(destination);
+    }
+
+    private static T[] ToArrayCore<T>(BigReadOnlySpan<T> span)
+    {
+        if (span._length > Array.MaxLength)
+        {
+            throw new InvalidOperationException("The span is too large to copy into a single array.");
+        }
+
+        T[] result = new T[(int)span._length];
+        CopyToCore(span, result);
+        return result;
+    }
+
+    private static BigArray<T> ToBigArrayCore<T>(BigReadOnlySpan<T> span)
+    {
+        BigArray<T> result = new(span._length);
+        CopyToCore(span, result.AsBigSpan());
+        return result;
+    }
+
+    private static bool SequenceEqualCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> other, IEqualityComparer<T>? comparer)
+    {
+        if (span._length != other._length) return false;
+
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            if (!CreateReadOnlySpan(span, chunkLength).SequenceEqual(CreateReadOnlySpan(other, chunkLength), comparer))
+            {
+                return false;
+            }
+
+            span = SliceUnchecked(span, chunkLength);
+            other = SliceUnchecked(other, chunkLength);
+        }
+
+        return true;
+    }
+
+    private static int SequenceCompareToCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> other, IComparer<T>? comparer)
+    {
+        nint remaining = Math.Min(span._length, other._length);
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            int result = CreateReadOnlySpan(span, chunkLength).SequenceCompareTo(CreateReadOnlySpan(other, chunkLength), comparer);
+            if (result != 0) return result;
+
+            remaining -= chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+            other = SliceUnchecked(other, chunkLength);
+        }
+
+        return span._length.CompareTo(other._length);
+    }
+
+    private static nint IndexOfCore<T>(BigReadOnlySpan<T> span, T value, IEqualityComparer<T>? comparer)
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOf(value, comparer);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfCore<T>(BigReadOnlySpan<T> span, T value, IEqualityComparer<T>? comparer)
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOf(value, comparer);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static bool StartsWithCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        return value._length <= span._length && SequenceEqualCore(SliceUnchecked(span, 0, value._length), value, comparer);
+    }
+
+    private static bool EndsWithCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        return value._length <= span._length && SequenceEqualCore(SliceUnchecked(span, span._length - value._length, value._length), value, comparer);
+    }
+
+    extension<T>(BigArray<T> array)
+    {
+        /// <summary>
+        /// Sets all elements in the array to the default value of <typeparamref name="T"/>.
+        /// </summary>
+        public void Clear()
+        {
+            array.AsBigSpan().Clear();
+        }
+
+        /// <summary>
+        /// Fills the array with the specified value.
+        /// </summary>
+        /// <param name="value">The value to assign to each element.</param>
+        public void Fill(T value)
+        {
+            array.AsBigSpan().Fill(value);
+        }
+
+        /// <summary>
+        /// Copies the array to a destination <see cref="BigArray{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination array.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+        public void CopyTo(BigArray<T> destination)
+        {
+            array.AsBigSpan().CopyTo(destination.AsBigSpan());
+        }
+
+        /// <summary>
+        /// Copies the array to a destination <see cref="BigArray{T}"/> starting at the specified destination index.
+        /// </summary>
+        /// <param name="destination">The destination array.</param>
+        /// <param name="destinationIndex">The zero-based destination index at which copying begins.</param>
+        /// <exception cref="ArgumentException">Thrown when the destination range is too small.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="destinationIndex"/> is outside the bounds of <paramref name="destination"/>.</exception>
+        public void CopyTo(BigArray<T> destination, nint destinationIndex)
+        {
+            array.AsBigSpan().CopyTo(destination.AsBigSpan(destinationIndex));
+        }
+
+        /// <summary>
+        /// Attempts to copy the array to a destination <see cref="BigArray{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination array.</param>
+        /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+        public bool TryCopyTo(BigArray<T> destination)
+        {
+            return array.AsBigSpan().TryCopyTo(destination.AsBigSpan());
+        }
+
+        /// <summary>
+        /// Copies the array to a new single-dimensional array.
+        /// </summary>
+        /// <returns>A new array containing the copied elements.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the array is too large to fit in a single managed array.</exception>
+        public T[] ToArray()
+        {
+            return array.AsBigSpan().ToArray();
+        }
+
+        /// <summary>
+        /// Searches for the specified value and returns the index of its first occurrence.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the first occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint IndexOf(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return array.AsBigSpan().IndexOf(value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified value and returns the index of its last occurrence.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the last occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint LastIndexOf(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return array.AsBigSpan().LastIndexOf(value, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the array contains the specified value.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> is found; otherwise, <see langword="false"/>.</returns>
+        public bool Contains(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return array.AsBigSpan().Contains(value, comparer);
+        }
+    }
+
     extension<T>(BigSpan<T> span)
     {
         /// <summary>
-        /// Copies the elements of the current <see cref="BigSpan{T}"/> to a destination <see cref="BigSpan{T}"/>.
+        /// Sets all elements in the span to the default value of <typeparamref name="T"/>.
         /// </summary>
-        /// <param name="destination">The destination <see cref="BigSpan{T}"/> to copy the elements to.</param>
-        public void CopyTo(BigSpan<T> destination)
+        public void Clear()
         {
-            if (span._length > destination._length) ThrowArgumentException("Destination span is too small.", nameof(destination));
-            if (span._length == 0) return;
             nint remaining = span._length;
-            while (remaining > Array.MaxLength)
+            while (remaining > 0)
             {
-                MemoryMarshal.CreateSpan(ref span._first, Array.MaxLength).CopyTo(MemoryMarshal.CreateSpan(ref destination._first, Array.MaxLength));
-                remaining -= Array.MaxLength;
-                span = span.Slice(Array.MaxLength);
-                destination = destination.Slice(Array.MaxLength);
-            }
-            if (remaining > 0)
-            {
-                MemoryMarshal.CreateSpan(ref span._first, (int)remaining).CopyTo(MemoryMarshal.CreateSpan(ref destination._first, (int)remaining));
+                int chunkLength = GetChunkLength(remaining);
+                CreateSpan(span, chunkLength).Clear();
+                remaining -= chunkLength;
+                span = SliceUnchecked(span, chunkLength);
             }
         }
 
         /// <summary>
-        /// Determines whether two <see cref="BigSpan{T}"/> instances are equal by comparing their elements.
+        /// Fills the span with the specified value.
         /// </summary>
-        /// <param name="other">The other <see cref="BigSpan{T}"/> to compare to.</param>
-        /// <param name="comparer">An optional equality comparer to use for the comparison.</param>
-        /// <returns><c>true</c> if the <see cref="BigSpan{T}"/> instances are equal; otherwise, <c>false</c>.</returns>
-        public bool SequenceEqual(BigSpan<T> other, IEqualityComparer<T>? comparer = null)
+        /// <param name="value">The value to assign to each element.</param>
+        public void Fill(T value)
         {
-            if (span._length != other._length) return false;
-            if (span._length == 0) return true;
             nint remaining = span._length;
-            while (remaining > Array.MaxLength)
+            while (remaining > 0)
             {
-                if (!MemoryMarshal.CreateSpan(ref span._first, Array.MaxLength).SequenceEqual(MemoryMarshal.CreateSpan(ref other._first, Array.MaxLength), comparer))
-                {
-                    return false;
-                }
-                remaining -= Array.MaxLength;
-                span = span.Slice(Array.MaxLength);
-                other = other.Slice(Array.MaxLength);
+                int chunkLength = GetChunkLength(remaining);
+                CreateSpan(span, chunkLength).Fill(value);
+                remaining -= chunkLength;
+                span = SliceUnchecked(span, chunkLength);
             }
-            if (remaining > 0)
-            {
-                return MemoryMarshal.CreateSpan(ref span._first, (int)remaining).SequenceEqual(MemoryMarshal.CreateSpan(ref other._first, (int)remaining), comparer);
-            }
+        }
+
+        /// <summary>
+        /// Copies the elements of the current span to a destination <see cref="BigSpan{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+        public void CopyTo(BigSpan<T> destination)
+        {
+            if (span._length > destination._length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            CopyToCore(AsReadOnlySpan(span), destination);
+        }
+
+        /// <summary>
+        /// Copies the elements of the current span to a destination <see cref="Span{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+        public void CopyTo(Span<T> destination)
+        {
+            if (span._length > destination.Length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            CopyToCore(AsReadOnlySpan(span), destination);
+        }
+
+        /// <summary>
+        /// Attempts to copy the current span to a destination <see cref="BigSpan{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+        public bool TryCopyTo(BigSpan<T> destination)
+        {
+            if (span._length > destination._length) return false;
+            CopyToCore(AsReadOnlySpan(span), destination);
             return true;
         }
 
         /// <summary>
-        /// Compares two <see cref="BigSpan{T}"/> instances lexicographically.
+        /// Attempts to copy the current span to a destination <see cref="Span{T}"/>.
         /// </summary>
-        /// <param name="other">The other <see cref="BigSpan{T}"/> to compare to.</param>
-        /// <param name="comparer">An optional comparer to use for the comparison.</param>
-        /// <returns>A value indicating the relative order of the <see cref="BigSpan{T}"/> instances.</returns>
-        public int SequenceCompareTo(BigSpan<T> other, IComparer<T>? comparer = null)
+        /// <param name="destination">The destination span.</param>
+        /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+        public bool TryCopyTo(Span<T> destination)
         {
-            nint minLength = Math.Min(span._length, other._length);
-            nint remaining = minLength;
-            while (remaining > Array.MaxLength)
-            {
-                int result = MemoryMarshal.CreateSpan(ref span._first, Array.MaxLength).SequenceCompareTo(MemoryMarshal.CreateSpan(ref other._first, Array.MaxLength), comparer);
-                if (result != 0) return result;
-                remaining -= Array.MaxLength;
-                span = span.Slice(Array.MaxLength);
-                other = other.Slice(Array.MaxLength);
-            }
-            if (remaining > 0)
-            {
-                int result = MemoryMarshal.CreateSpan(ref span._first, (int)remaining).SequenceCompareTo(MemoryMarshal.CreateSpan(ref other._first, (int)remaining), comparer);
-                if (result != 0) return result;
-            }
-            return span._length.CompareTo(other._length);
+            if (span._length > destination.Length) return false;
+            CopyToCore(AsReadOnlySpan(span), destination);
+            return true;
         }
 
         /// <summary>
-        /// Determines whether the <see cref="BigSpan{T}"/> contains a specific value.
+        /// Copies the contents of the span into a new single-dimensional array.
         /// </summary>
-        /// <param name="value">The value to locate in the <see cref="BigSpan{T}"/>.</param>
-        /// <param name="comparer">An optional equality comparer to use for the comparison.</param>
-        /// <returns><c>true</c> if the <see cref="BigSpan{T}"/> contains the specified value; otherwise, <c>false</c>.</returns>
+        /// <returns>A new array containing the copied elements.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the span is too large to fit in a single managed array.</exception>
+        public T[] ToArray()
+        {
+            return ToArrayCore(AsReadOnlySpan(span));
+        }
+
+        /// <summary>
+        /// Copies the contents of the span into a new <see cref="BigArray{T}"/>.
+        /// </summary>
+        /// <returns>A new <see cref="BigArray{T}"/> containing the copied elements.</returns>
+        public BigArray<T> ToBigArray()
+        {
+            return ToBigArrayCore(AsReadOnlySpan(span));
+        }
+
+        /// <summary>
+        /// Creates a <see cref="Span{T}"/> over a range of the current span.
+        /// </summary>
+        /// <param name="start">The zero-based index at which the span starts.</param>
+        /// <param name="length">The number of elements in the span.</param>
+        /// <returns>A <see cref="Span{T}"/> over the specified range.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of the span.</exception>
+        public Span<T> ToSpan(nint start, int length)
+        {
+            if ((nuint)start > (nuint)span._length || (nuint)(nint)length > (nuint)(span._length - start)) BigArray<T>.ThrowOutOfRangeException(start);
+            return CreateSpan(SliceUnchecked(span, start, length), length);
+        }
+
+        /// <summary>
+        /// Searches for the specified value and returns the index of its first occurrence.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the first occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint IndexOf(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return IndexOfCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified value and returns the index of its last occurrence.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the last occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint LastIndexOf(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return LastIndexOfCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains the specified value.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> is found; otherwise, <see langword="false"/>.</returns>
         public bool Contains(T value, IEqualityComparer<T>? comparer = null)
         {
-            nint remaining = span._length;
-            while (remaining > Array.MaxLength)
-            {
-                if (MemoryMarshal.CreateSpan(ref span._first, Array.MaxLength).Contains(value, comparer))
-                {
-                    return true;
-                }
-                remaining -= Array.MaxLength;
-                span = span.Slice(Array.MaxLength);
-            }
-            if (remaining > 0)
-            {
-                return MemoryMarshal.CreateSpan(ref span._first, (int)remaining).Contains(value, comparer);
-            }
-            return false;
+            return IndexOfCore(AsReadOnlySpan(span), value, comparer) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the current span and another span contain the same elements.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if the spans contain the same elements; otherwise, <see langword="false"/>.</returns>
+        public bool SequenceEqual(BigSpan<T> other, IEqualityComparer<T>? comparer = null)
+        {
+            return SequenceEqualCore(AsReadOnlySpan(span), AsReadOnlySpan(other), comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the current span and another read-only span contain the same elements.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if the spans contain the same elements; otherwise, <see langword="false"/>.</returns>
+        public bool SequenceEqual(BigReadOnlySpan<T> other, IEqualityComparer<T>? comparer = null)
+        {
+            return SequenceEqualCore(AsReadOnlySpan(span), other, comparer);
+        }
+
+        /// <summary>
+        /// Compares the current span with another span lexicographically.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default comparer.</param>
+        /// <returns>A value that indicates the relative order of the spans.</returns>
+        public int SequenceCompareTo(BigSpan<T> other, IComparer<T>? comparer = null)
+        {
+            return SequenceCompareToCore(AsReadOnlySpan(span), AsReadOnlySpan(other), comparer);
+        }
+
+        /// <summary>
+        /// Compares the current span with another read-only span lexicographically.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default comparer.</param>
+        /// <returns>A value that indicates the relative order of the spans.</returns>
+        public int SequenceCompareTo(BigReadOnlySpan<T> other, IComparer<T>? comparer = null)
+        {
+            return SequenceCompareToCore(AsReadOnlySpan(span), other, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the beginning of the current span matches another span.
+        /// </summary>
+        /// <param name="value">The span to compare with the start of the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> matches the start of the current span; otherwise, <see langword="false"/>.</returns>
+        public bool StartsWith(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return StartsWithCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the end of the current span matches another span.
+        /// </summary>
+        /// <param name="value">The span to compare with the end of the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> matches the end of the current span; otherwise, <see langword="false"/>.</returns>
+        public bool EndsWith(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return EndsWithCore(AsReadOnlySpan(span), value, comparer);
+        }
+    }
+
+    extension<T>(BigReadOnlySpan<T> span)
+    {
+        /// <summary>
+        /// Copies the elements of the current read-only span to a destination <see cref="BigSpan{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+        public void CopyTo(BigSpan<T> destination)
+        {
+            if (span._length > destination._length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            CopyToCore(span, destination);
+        }
+
+        /// <summary>
+        /// Copies the elements of the current read-only span to a destination <see cref="Span{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+        public void CopyTo(Span<T> destination)
+        {
+            if (span._length > destination.Length) ThrowArgumentException("Destination span is too small.", nameof(destination));
+            CopyToCore(span, destination);
+        }
+
+        /// <summary>
+        /// Attempts to copy the current read-only span to a destination <see cref="BigSpan{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+        public bool TryCopyTo(BigSpan<T> destination)
+        {
+            if (span._length > destination._length) return false;
+            CopyToCore(span, destination);
+            return true;
+        }
+
+        /// <summary>
+        /// Attempts to copy the current read-only span to a destination <see cref="Span{T}"/>.
+        /// </summary>
+        /// <param name="destination">The destination span.</param>
+        /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+        public bool TryCopyTo(Span<T> destination)
+        {
+            if (span._length > destination.Length) return false;
+            CopyToCore(span, destination);
+            return true;
+        }
+
+        /// <summary>
+        /// Copies the contents of the read-only span into a new single-dimensional array.
+        /// </summary>
+        /// <returns>A new array containing the copied elements.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the span is too large to fit in a single managed array.</exception>
+        public T[] ToArray()
+        {
+            return ToArrayCore(span);
+        }
+
+        /// <summary>
+        /// Copies the contents of the read-only span into a new <see cref="BigArray{T}"/>.
+        /// </summary>
+        /// <returns>A new <see cref="BigArray{T}"/> containing the copied elements.</returns>
+        public BigArray<T> ToBigArray()
+        {
+            return ToBigArrayCore(span);
+        }
+
+        /// <summary>
+        /// Creates a <see cref="ReadOnlySpan{T}"/> over a range of the current read-only span.
+        /// </summary>
+        /// <param name="start">The zero-based index at which the span starts.</param>
+        /// <param name="length">The number of elements in the span.</param>
+        /// <returns>A <see cref="ReadOnlySpan{T}"/> over the specified range.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of the span.</exception>
+        public ReadOnlySpan<T> ToSpan(nint start, int length)
+        {
+            if ((nuint)start > (nuint)span._length || (nuint)(nint)length > (nuint)(span._length - start)) BigArray<T>.ThrowOutOfRangeException(start);
+            return CreateReadOnlySpan(SliceUnchecked(span, start, length), length);
+        }
+
+        /// <summary>
+        /// Searches for the specified value and returns the index of its first occurrence.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the first occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint IndexOf(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return IndexOfCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified value and returns the index of its last occurrence.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the last occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint LastIndexOf(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return LastIndexOfCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains the specified value.
+        /// </summary>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> is found; otherwise, <see langword="false"/>.</returns>
+        public bool Contains(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return IndexOfCore(span, value, comparer) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the current read-only span and another read-only span contain the same elements.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if the spans contain the same elements; otherwise, <see langword="false"/>.</returns>
+        public bool SequenceEqual(BigReadOnlySpan<T> other, IEqualityComparer<T>? comparer = null)
+        {
+            return SequenceEqualCore(span, other, comparer);
+        }
+
+        /// <summary>
+        /// Compares the current read-only span with another read-only span lexicographically.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default comparer.</param>
+        /// <returns>A value that indicates the relative order of the spans.</returns>
+        public int SequenceCompareTo(BigReadOnlySpan<T> other, IComparer<T>? comparer = null)
+        {
+            return SequenceCompareToCore(span, other, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the beginning of the current read-only span matches another span.
+        /// </summary>
+        /// <param name="value">The span to compare with the start of the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> matches the start of the current span; otherwise, <see langword="false"/>.</returns>
+        public bool StartsWith(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return StartsWithCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Determines whether the end of the current read-only span matches another span.
+        /// </summary>
+        /// <param name="value">The span to compare with the end of the current span.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns><see langword="true"/> if <paramref name="value"/> matches the end of the current span; otherwise, <see langword="false"/>.</returns>
+        public bool EndsWith(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return EndsWithCore(span, value, comparer);
         }
     }
 }
