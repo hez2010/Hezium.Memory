@@ -46,6 +46,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Initializes a new instance of the <see cref="BigMemory{T}"/> struct over the specified array.
     /// </summary>
     /// <param name="array">The array to wrap, or <see langword="null"/> for empty memory.</param>
+    [OverloadResolutionPriority(-1)]
     public BigMemory(T[]? array)
     {
         if (array is null)
@@ -68,6 +69,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <param name="start">The zero-based index at which the memory starts.</param>
     /// <param name="length">The number of elements in the memory.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
+    [OverloadResolutionPriority(-1)]
     public BigMemory(T[]? array, int start, int length)
     {
         nint arrayLength = array?.Length ?? 0;
@@ -316,6 +318,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// Initializes a new instance of the <see cref="BigReadOnlyMemory{T}"/> struct over the specified array.
     /// </summary>
     /// <param name="array">The array to wrap, or <see langword="null"/> for empty memory.</param>
+    [OverloadResolutionPriority(-1)]
     public BigReadOnlyMemory(T[]? array)
     {
         if (array is null)
@@ -338,6 +341,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// <param name="start">The zero-based index at which the memory starts.</param>
     /// <param name="length">The number of elements in the memory.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
+    [OverloadResolutionPriority(-1)]
     public BigReadOnlyMemory(T[]? array, nint start, nint length)
     {
         nint arrayLength = array?.Length ?? 0;

@@ -9,6 +9,7 @@ namespace Hezium.Memory;
 /// Provides a type-safe view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
 /// </summary>
 /// <typeparam name="T">The type of elements in the span.</typeparam>
+[CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigSpan))]
 public readonly ref struct BigSpan<T>
 {
     internal readonly ref T _first;
@@ -37,6 +38,16 @@ public readonly ref struct BigSpan<T>
     {
         _first = ref first;
         _length = 1;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a contiguous region of memory.
+    /// </summary>
+    /// <param name="span">The span of values to represent.</param>
+    public BigSpan(Span<T> span)
+    {
+        _first = ref MemoryMarshal.GetReference(span);
+        _length = span.Length;
     }
 
     /// <summary>
@@ -254,6 +265,7 @@ public readonly ref struct BigSpan<T>
 /// Provides a type-safe read-only view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
 /// </summary>
 /// <typeparam name="T">The type of elements in the span.</typeparam>
+[CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigReadOnlySpan))]
 public readonly ref struct BigReadOnlySpan<T>
 {
     internal readonly ref readonly T _first;
@@ -285,6 +297,26 @@ public readonly ref struct BigReadOnlySpan<T>
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a span of memory starting at the specified reference and with the specified length.
+    /// </summary>
+    /// <param name="span">The <see cref="ReadOnlySpan{T}"/> to represent.</param>
+    public BigReadOnlySpan(ReadOnlySpan<T> span)
+    {
+        _first = ref MemoryMarshal.GetReference(span);
+        _length = span.Length;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a span of memory starting at the specified pointer and with the specified length.
+    /// </summary>
+    /// <param name="span">The <see cref="Span{T}"/> to represent.</param>
+    public BigReadOnlySpan(Span<T> span)
+    {
+        _first = ref MemoryMarshal.GetReference(span);
+        _length = span.Length;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents the entire <see cref="BigArray{T}"/>.
     /// </summary>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
@@ -295,15 +327,51 @@ public readonly ref struct BigReadOnlySpan<T>
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a span of memory starting at the specified reference and with the specified length.
+    /// </summary>
+    /// <param name="array">The array to represent.</param>
+    /// <param name="start">The starting index of the span within the array.</param>
+    /// <param name="length">The number of elements in the span.</param>
+    public BigReadOnlySpan(BigArray<T> array, nint start, nint length)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+
+        _first = ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage)), start);
+        _length = length;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a contiguous region of memory.
     /// </summary>
     /// <param name="array">The array to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
+    [OverloadResolutionPriority(-1)]
     public BigReadOnlySpan(T[] array)
     {
         ArgumentNullException.ThrowIfNull(array);
         _first = ref MemoryMarshal.GetArrayDataReference(array);
         _length = array.Length;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a span of memory starting at the specified reference and with the specified length.
+    /// </summary>
+    /// <param name="array">The array to represent.</param>
+    /// <param name="start">The starting index of the span within the array.</param>
+    /// <param name="length">The number of elements in the span.</param>
+    [OverloadResolutionPriority(-1)]
+    public BigReadOnlySpan(T[] array, int start, int length)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        ArgumentOutOfRangeException.ThrowIfNegative(start);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+
+        _first = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), start);
+        _length = length;
     }
 
     /// <summary>

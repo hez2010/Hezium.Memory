@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections;
 using System.Runtime.InteropServices;
-using Hezium.Memory;
 
 namespace Hezium.Memory.Tests;
 
@@ -21,6 +20,8 @@ public sealed class HeziumMemoryApiTests
         Assert.False(array.IsEmpty);
         Assert.Equal(5, array.Length);
 
+        BigSpan<int> values = [1, 2, 3, 4, 5];
+
         for (nint i = 0; i < array.Length; i++)
         {
             array[i] = (int)(i + 1);
@@ -30,13 +31,13 @@ public sealed class HeziumMemoryApiTests
         Assert.Equal(5, array[4]);
         Assert.Throws<ArgumentOutOfRangeException>(() => array[-1]);
         Assert.Throws<ArgumentOutOfRangeException>(() => array[5]);
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, array.ToArray());
-        Assert.Equal(new[] { 2, 3, 4 }, array.AsSpan(1, 3).ToArray());
+        Assert.Equal([1, 2, 3, 4, 5], array.ToArray());
+        Assert.Equal([2, 3, 4], array.AsSpan(1, 3).ToArray());
 
         BigSpan<int> span = array.AsBigSpan();
         Assert.Equal(5, span.Length);
-        Assert.Equal(new[] { 3, 4, 5 }, ToArray(array.AsBigSpan(2)));
-        Assert.Equal(new[] { 2, 3 }, ToArray(array.AsBigSpan(1, 2)));
+        Assert.Equal([3, 4, 5], ToArray(array.AsBigSpan(2)));
+        Assert.Equal([2, 3], ToArray(array.AsBigSpan(1, 2)));
 
         List<int> enumerated = [];
         foreach (int value in array)
@@ -59,10 +60,10 @@ public sealed class HeziumMemoryApiTests
     {
         BigArray<int> array = new(5);
         array.Fill(7);
-        Assert.Equal(new[] { 7, 7, 7, 7, 7 }, array.ToArray());
+        Assert.Equal([7, 7, 7, 7, 7], array.ToArray());
 
         array.Clear();
-        Assert.Equal(new[] { 0, 0, 0, 0, 0 }, array.ToArray());
+        Assert.Equal([0, 0, 0, 0, 0], array.ToArray());
 
         for (nint i = 0; i < array.Length; i++)
         {
@@ -71,13 +72,13 @@ public sealed class HeziumMemoryApiTests
 
         BigArray<int> destination = new(7);
         array.CopyTo(destination, 1);
-        Assert.Equal(new[] { 0, 1, 2, 3, 4, 5, 0 }, destination.ToArray());
+        Assert.Equal([0, 1, 2, 3, 4, 5, 0], destination.ToArray());
 
         BigArray<int> exact = new(5);
         array.CopyTo(exact);
         Assert.True(array.TryCopyTo(exact));
         Assert.False(array.TryCopyTo(new BigArray<int>(4)));
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, exact.ToArray());
+        Assert.Equal([1, 2, 3, 4, 5], exact.ToArray());
 
         Assert.Equal(2, array.IndexOf(3));
         Assert.Equal(2, array.LastIndexOf(3));
@@ -104,8 +105,8 @@ public sealed class HeziumMemoryApiTests
         Assert.False(span.IsEmpty);
         Assert.Equal(4, span.Length);
         Assert.Equal(3, span[2]);
-        Assert.Equal(new[] { 2, 3, 4 }, ToArray(span.Slice(1)));
-        Assert.Equal(new[] { 2, 3 }, ToArray(span.Slice(1, 2)));
+        Assert.Equal([2, 3, 4], ToArray(span.Slice(1)));
+        Assert.Equal([2, 3], ToArray(span.Slice(1, 2)));
         Assert.Throws<ArgumentOutOfRangeException>(SliceBigSpanPastEnd);
         Assert.Throws<ArgumentOutOfRangeException>(IndexBigSpanPastEnd);
 
@@ -119,7 +120,7 @@ public sealed class HeziumMemoryApiTests
         fixed (int* pointer = source)
         {
             BigSpan<int> pointerSpan = new(pointer, source.Length);
-            Assert.Equal(new[] { 1, 2, 3, 4 }, ToArray(pointerSpan));
+            Assert.Equal([1, 2, 3, 4], ToArray(pointerSpan));
             Assert.Throws<ArgumentOutOfRangeException>(CreateBigSpanWithNegativePointerLength);
         }
     }
@@ -159,7 +160,7 @@ public sealed class HeziumMemoryApiTests
 
         Assert.True(span.SequenceEqual((BigReadOnlySpan<int>)values.AsSpan()));
         Assert.True(span.SequenceEqual((BigSpan<int>)values.AsSpan()));
-        Assert.True(span.SequenceCompareTo((BigReadOnlySpan<int>)new[] { 1, 2, 4 }) < 0);
+        Assert.True(span.SequenceCompareTo((BigReadOnlySpan<int>)[1, 2, 4]) < 0);
         Assert.Equal(0, span.SequenceCompareTo((BigSpan<int>)values.AsSpan()));
         Assert.True(span.StartsWith(new[] { 1, 2 }));
         Assert.True(span.EndsWith(new[] { 2, 1 }));
@@ -180,16 +181,16 @@ public sealed class HeziumMemoryApiTests
         int[] values = [0, 2, 1, 2, 0];
         BigSpan<int> span = values;
 
-        Assert.Equal(new[] { 2, 1, 2 }, ToArray(span.Trim(0)));
-        Assert.Equal(new[] { 1 }, ToArray(span.Trim(new[] { 0, 2 })));
-        Assert.Equal(new[] { 2, 1, 2, 0 }, ToArray(span.TrimStart(0)));
-        Assert.Equal(new[] { 1, 2, 0 }, ToArray(span.TrimStart(new[] { 0, 2 })));
-        Assert.Equal(new[] { 0, 2, 1, 2 }, ToArray(span.TrimEnd(0)));
-        Assert.Equal(new[] { 0, 2, 1 }, ToArray(span.TrimEnd(new[] { 0, 2 })));
+        Assert.Equal([2, 1, 2], ToArray(span.Trim(0)));
+        Assert.Equal([1], ToArray(span.Trim(new[] { 0, 2 })));
+        Assert.Equal([2, 1, 2, 0], ToArray(span.TrimStart(0)));
+        Assert.Equal([1, 2, 0], ToArray(span.TrimStart(new[] { 0, 2 })));
+        Assert.Equal([0, 2, 1, 2], ToArray(span.TrimEnd(0)));
+        Assert.Equal([0, 2, 1], ToArray(span.TrimEnd(new[] { 0, 2 })));
 
-        Assert.Equal(new[] { 0, 2, 1, 2, 0 }, span.ToArray());
-        Assert.Equal(new[] { 2, 1, 2 }, span.ToSpan(1, 3).ToArray());
-        Assert.Equal(new[] { 0, 2, 1, 2, 0 }, span.ToBigArray().ToArray());
+        Assert.Equal([0, 2, 1, 2, 0], span.ToArray());
+        Assert.Equal([2, 1, 2], span.ToSpan(1, 3).ToArray());
+        Assert.Equal([0, 2, 1, 2, 0], span.ToBigArray().ToArray());
 
         int[] copy = new int[5];
         span.CopyTo(copy);
@@ -204,16 +205,16 @@ public sealed class HeziumMemoryApiTests
         Assert.True(span.TryCopyTo(destinationArray.AsBigSpan()));
         Assert.Equal(values, destinationArray.ToArray());
 
-        Assert.Throws<ArgumentException>(CopyBigSpanToShortSpan);
-        Assert.Throws<ArgumentException>(CopyBigSpanToShortBigSpan);
+        Assert.Throws<ArgumentOutOfRangeException>(CopyBigSpanToShortSpan);
+        Assert.Throws<ArgumentOutOfRangeException>(CopyBigSpanToShortBigSpan);
 
-        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(span.Split(2)));
-        Assert.Equal(new[] { 0, 0, 1, 0, 0 }, SegmentLengths(span.SplitAny(new[] { 0, 2 })));
+        Assert.Equal([1, 1, 1], SegmentLengths(span.Split(2)));
+        Assert.Equal([0, 0, 1, 0, 0], SegmentLengths(span.SplitAny(new[] { 0, 2 })));
 
         byte[] byteValues = [0, 2, 1, 2, 0];
         BigSpan<byte> byteSpan = byteValues;
-        SearchValues<byte> searchValues = SearchValues.Create((ReadOnlySpan<byte>)[2, 9]);
-        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(byteSpan.SplitAny(searchValues)));
+        SearchValues<byte> searchValues = SearchValues.Create([2, 9]);
+        Assert.Equal([1, 1, 1], SegmentLengths(byteSpan.SplitAny(searchValues)));
         Assert.Equal(1, byteSpan.IndexOfAny(searchValues));
         Assert.Equal(3, byteSpan.LastIndexOfAny(searchValues));
         Assert.True(byteSpan.ContainsAny(searchValues));
@@ -224,22 +225,22 @@ public sealed class HeziumMemoryApiTests
 
         int[] sortable = [3, 1, 2];
         ((BigSpan<int>)sortable.AsSpan()).Sort();
-        Assert.Equal(new[] { 1, 2, 3 }, sortable);
+        Assert.Equal([1, 2, 3], sortable);
 
         sortable = [1, 3, 2];
         ((BigSpan<int>)sortable.AsSpan()).Sort(Comparer<int>.Create((left, right) => right.CompareTo(left)));
-        Assert.Equal(new[] { 3, 2, 1 }, sortable);
+        Assert.Equal([3, 2, 1], sortable);
 
         sortable = [2, 3, 1];
         ((BigSpan<int>)sortable.AsSpan()).Sort((left, right) => left.CompareTo(right));
-        Assert.Equal(new[] { 1, 2, 3 }, sortable);
+        Assert.Equal([1, 2, 3], sortable);
         Assert.Throws<ArgumentNullException>(() => ((BigSpan<int>)sortable.AsSpan()).Sort((Comparison<int>)null!));
 
         span.Clear();
-        Assert.Equal(new[] { 0, 0, 0, 0, 0 }, values);
+        Assert.Equal([0, 0, 0, 0, 0], values);
 
         span.Fill(4);
-        Assert.Equal(new[] { 4, 4, 4, 4, 4 }, values);
+        Assert.Equal([4, 4, 4, 4, 4], values);
     }
 
     [Fact]
@@ -258,8 +259,8 @@ public sealed class HeziumMemoryApiTests
         BigReadOnlySpan<int> span = values;
         Assert.False(span.IsEmpty);
         Assert.Equal(5, span.Length);
-        Assert.Equal(new[] { 2, 3, 2, 1 }, ToArray(span.Slice(1)));
-        Assert.Equal(new[] { 2, 3 }, ToArray(span.Slice(1, 2)));
+        Assert.Equal([2, 3, 2, 1], ToArray(span.Slice(1)));
+        Assert.Equal([2, 3], ToArray(span.Slice(1, 2)));
         Assert.Throws<ArgumentOutOfRangeException>(SliceBigReadOnlySpanPastEnd);
         Assert.Throws<ArgumentOutOfRangeException>(IndexBigReadOnlySpanPastEnd);
 
@@ -279,7 +280,7 @@ public sealed class HeziumMemoryApiTests
 
         Assert.Equal(values, span.ToArray());
         Assert.Equal(values, span.ToBigArray().ToArray());
-        Assert.Equal(new[] { 2, 3, 2 }, span.ToSpan(1, 3).ToArray());
+        Assert.Equal([2, 3, 2], span.ToSpan(1, 3).ToArray());
 
         int[] destination = new int[5];
         span.CopyTo(destination);
@@ -291,17 +292,17 @@ public sealed class HeziumMemoryApiTests
         span.CopyTo(destinationArray.AsBigSpan());
         Assert.True(span.TryCopyTo(destinationArray.AsBigSpan()));
         Assert.Equal(values, destinationArray.ToArray());
-        Assert.Throws<ArgumentException>(CopyBigReadOnlySpanToShortSpan);
-        Assert.Throws<ArgumentException>(CopyBigReadOnlySpanToShortBigSpan);
+        Assert.Throws<ArgumentOutOfRangeException>(CopyBigReadOnlySpanToShortSpan);
+        Assert.Throws<ArgumentOutOfRangeException>(CopyBigReadOnlySpanToShortBigSpan);
 
         Assert.Equal(1, span.IndexOf(2));
         Assert.Equal(3, span.LastIndexOf(2));
         Assert.True(span.Contains(3));
         Assert.Equal(2, span.BinarySearch(3));
         Assert.Equal(2, span.BinarySearch(3, Comparer<int>.Default));
-        Assert.Equal(2, span.IndexOfAny((BigReadOnlySpan<int>)new[] { 3, 9 }));
-        Assert.Equal(2, span.LastIndexOfAny((BigReadOnlySpan<int>)new[] { 3, 9 }));
-        Assert.True(span.ContainsAny((BigReadOnlySpan<int>)new[] { 3, 9 }));
+        Assert.Equal(2, span.IndexOfAny([3, 9]));
+        Assert.Equal(2, span.LastIndexOfAny([3, 9]));
+        Assert.True(span.ContainsAny([3, 9]));
         Assert.Equal(1, span.IndexOfAny(4, 2));
         Assert.Equal(1, span.IndexOfAny(4, 2, 9));
         Assert.Equal(3, span.LastIndexOfAny(4, 2));
@@ -315,26 +316,26 @@ public sealed class HeziumMemoryApiTests
         Assert.Equal(2, span.LastIndexOfAnyExcept(1, 2));
         Assert.Equal(-1, span.LastIndexOfAnyExcept(1, 2, 3));
         Assert.True(span.ContainsAnyExcept(2));
-        Assert.True(span.ContainsAnyExcept((BigReadOnlySpan<int>)new[] { 1, 3 }));
+        Assert.True(span.ContainsAnyExcept([1, 3]));
         Assert.True(span.ContainsAnyExcept(1, 2));
         Assert.False(span.ContainsAnyExcept(1, 2, 3));
         Assert.True(span.SequenceEqual((BigReadOnlySpan<int>)values));
-        Assert.True(span.SequenceCompareTo((BigReadOnlySpan<int>)new[] { 1, 2, 4 }) < 0);
+        Assert.True(span.SequenceCompareTo([1, 2, 4]) < 0);
         Assert.True(span.StartsWith(new[] { 1, 2 }));
         Assert.True(span.EndsWith(new[] { 2, 1 }));
-        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(span.Split(2)));
-        Assert.Equal(new[] { 0, 0, 1, 0, 0 }, SegmentLengths(span.SplitAny(new[] { 1, 2 })));
-        Assert.Equal(new[] { 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 3, 0 }).Trim(0)));
-        Assert.Equal(new[] { 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 2, 3, 2, 0 }).Trim(new[] { 0, 2 })));
-        Assert.Equal(new[] { 3, 0 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 3, 0 }).TrimStart(0)));
-        Assert.Equal(new[] { 3, 2, 0 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 2, 3, 2, 0 }).TrimStart(new[] { 0, 2 })));
-        Assert.Equal(new[] { 0, 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 3, 0 }).TrimEnd(0)));
-        Assert.Equal(new[] { 0, 2, 3 }, ToArray(((BigReadOnlySpan<int>)new[] { 0, 2, 3, 2, 0 }).TrimEnd(new[] { 0, 2 })));
+        Assert.Equal([1, 1, 1], SegmentLengths(span.Split(2)));
+        Assert.Equal([0, 0, 1, 0, 0], SegmentLengths(span.SplitAny(new[] { 1, 2 })));
+        Assert.Equal([3], ToArray(((BigReadOnlySpan<int>)[0, 3, 0]).Trim(0)));
+        Assert.Equal([3], ToArray(((BigReadOnlySpan<int>)[0, 2, 3, 2, 0]).Trim(new[] { 0, 2 })));
+        Assert.Equal([3, 0], ToArray(((BigReadOnlySpan<int>)[0, 3, 0]).TrimStart(0)));
+        Assert.Equal([3, 2, 0], ToArray(((BigReadOnlySpan<int>)[0, 2, 3, 2, 0]).TrimStart(new[] { 0, 2 })));
+        Assert.Equal([0, 3], ToArray(((BigReadOnlySpan<int>)[0, 3, 0]).TrimEnd(0)));
+        Assert.Equal([0, 2, 3], ToArray(((BigReadOnlySpan<int>)[0, 2, 3, 2, 0]).TrimEnd(new[] { 0, 2 })));
 
         byte[] byteValues = [1, 2, 3, 2, 1];
         BigReadOnlySpan<byte> byteSpan = byteValues;
-        SearchValues<byte> searchValues = SearchValues.Create((ReadOnlySpan<byte>)[2, 9]);
-        Assert.Equal(new[] { 1, 1, 1 }, SegmentLengths(byteSpan.SplitAny(searchValues)));
+        SearchValues<byte> searchValues = SearchValues.Create([2, 9]);
+        Assert.Equal([1, 1, 1], SegmentLengths(byteSpan.SplitAny(searchValues)));
         Assert.Equal(1, byteSpan.IndexOfAny(searchValues));
         Assert.Equal(3, byteSpan.LastIndexOfAny(searchValues));
         Assert.True(byteSpan.ContainsAny(searchValues));
@@ -368,8 +369,8 @@ public sealed class HeziumMemoryApiTests
         BigMemory<int> memory = values;
         Assert.False(memory.IsEmpty);
         Assert.Equal(5, memory.Length);
-        Assert.Equal(new[] { 2, 3, 4 }, memory.Slice(1, 3).ToArray());
-        Assert.Equal(new[] { 3, 4, 5 }, memory.Slice(2).ToArray());
+        Assert.Equal([2, 3, 4], memory.Slice(1, 3).ToArray());
+        Assert.Equal([3, 4, 5], memory.Slice(2).ToArray());
         Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(6));
         Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(4, 2));
 
@@ -377,7 +378,7 @@ public sealed class HeziumMemoryApiTests
         Assert.Equal(30, values[2]);
 
         BigMemory<int> segmentMemory = new ArraySegment<int>(values, 1, 3);
-        Assert.Equal(new[] { 2, 30, 4 }, segmentMemory.ToArray());
+        Assert.Equal([2, 30, 4], segmentMemory.ToArray());
 
         BigArray<int> owner = new(5);
         for (nint i = 0; i < owner.Length; i++)
@@ -386,17 +387,17 @@ public sealed class HeziumMemoryApiTests
         }
 
         BigMemory<int> ownerMemory = owner.AsBigMemory(1, 3);
-        Assert.Equal(new[] { 2, 3, 4 }, ownerMemory.ToArray());
+        Assert.Equal([2, 3, 4], ownerMemory.ToArray());
         ownerMemory.Span[1] = 42;
         Assert.Equal(42, owner[2]);
-        Assert.Equal(new[] { 2, 42, 4 }, ((BigReadOnlyMemory<int>)owner.AsBigMemory(1, 3)).ToArray());
+        Assert.Equal([2, 42, 4], ((BigReadOnlyMemory<int>)owner.AsBigMemory(1, 3)).ToArray());
 
         BigMemory<int> destination = new int[5];
         memory.CopyTo(destination);
         Assert.Equal(values, destination.ToArray());
         Assert.True(memory.TryCopyTo(destination));
         Assert.False(memory.TryCopyTo(new int[4]));
-        Assert.Throws<ArgumentException>(() => memory.CopyTo(new int[4]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => memory.CopyTo(new int[4]));
         Assert.Equal(values, memory.ToBigArray().ToArray());
 
         BigReadOnlyMemory<int> readOnly = memory;
@@ -448,13 +449,13 @@ public sealed class HeziumMemoryApiTests
         BigReadOnlyMemory<int> memory = values;
         Assert.False(memory.IsEmpty);
         Assert.Equal(5, memory.Length);
-        Assert.Equal(new[] { 2, 3, 4 }, memory.Slice(1, 3).ToArray());
-        Assert.Equal(new[] { 3, 4, 5 }, memory.Slice(2).ToArray());
+        Assert.Equal([2, 3, 4], memory.Slice(1, 3).ToArray());
+        Assert.Equal([3, 4, 5], memory.Slice(2).ToArray());
         Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(6));
         Assert.Throws<ArgumentOutOfRangeException>(() => memory.Slice(4, 2));
 
         BigReadOnlyMemory<int> segmentMemory = new ArraySegment<int>(values, 1, 3);
-        Assert.Equal(new[] { 2, 3, 4 }, segmentMemory.ToArray());
+        Assert.Equal([2, 3, 4], segmentMemory.ToArray());
 
         BigArray<int> owner = new(5);
         for (nint i = 0; i < owner.Length; i++)
@@ -463,15 +464,15 @@ public sealed class HeziumMemoryApiTests
         }
 
         BigReadOnlyMemory<int> ownerMemory = new(owner, 1, 3);
-        Assert.Equal(new[] { 2, 3, 4 }, ownerMemory.ToArray());
-        Assert.Equal(new[] { 2, 3, 4 }, new BigReadOnlyMemory<int>(owner, 1, 3).ToArray());
+        Assert.Equal([2, 3, 4], ownerMemory.ToArray());
+        Assert.Equal([2, 3, 4], new BigReadOnlyMemory<int>(owner, 1, 3).ToArray());
 
         BigMemory<int> destination = new int[5];
         memory.CopyTo(destination);
         Assert.Equal(values, destination.ToArray());
         Assert.True(memory.TryCopyTo(destination));
         Assert.False(memory.TryCopyTo(new int[4]));
-        Assert.Throws<ArgumentException>(() => memory.CopyTo(new int[4]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => memory.CopyTo(new int[4]));
         Assert.Equal(values, memory.ToBigArray().ToArray());
 
         Assert.True(memory.Equals(new BigReadOnlyMemory<int>(values)));
@@ -617,7 +618,7 @@ public sealed class HeziumMemoryApiTests
     private static void IndexBigSpanOfNullSearchValues()
     {
         BigSpan<int> span = new int[] { 0, 2, 1, 2, 0 };
-        span.IndexOfAny((SearchValues<int>)null!);
+        span.IndexOfAny(null!);
     }
 
     private static void SliceBigReadOnlySpanPastEnd()
@@ -652,6 +653,6 @@ public sealed class HeziumMemoryApiTests
     private static void IndexBigReadOnlySpanOfNullSearchValues()
     {
         BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
-        span.IndexOfAny((SearchValues<int>)null!);
+        span.IndexOfAny(null!);
     }
 }

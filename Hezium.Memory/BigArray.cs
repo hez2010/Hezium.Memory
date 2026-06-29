@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -9,6 +8,7 @@ namespace Hezium.Memory;
 /// Represents a one-dimensional, zero-based collection that can expose more than <see cref="Array.MaxLength"/> logical elements.
 /// </summary>
 /// <typeparam name="T">The type of elements in the array.</typeparam>
+[CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigArray))]
 public sealed partial class BigArray<T> : IEnumerable<T>
 {
     internal readonly Array _storage;
@@ -36,28 +36,6 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         if (length <= Array.MaxLength) _storage = new ElementChunk1[length];
         else _storage = CreateBigArraySlow(length);
         _length = length;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BigArray{T}"/> class with a given array.
-    /// </summary>
-    /// <param name="array">The array to wrap.</param>
-    /// <param name="copy">Whether to copy the array or wrap it directly.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
-    public BigArray(T[] array, bool copy = true)
-    {
-        ArgumentNullException.ThrowIfNull(array);
-
-        _length = array.Length;
-        if (copy)
-        {
-            _storage = new ElementChunk1[array.Length];
-            array.CopyTo(_storage, 0);
-        }
-        else
-        {
-            _storage = array;
-        }
     }
 
     /// <summary>
