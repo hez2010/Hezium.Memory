@@ -92,7 +92,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         get
         {
             nint chunkSize = 65535 / Unsafe.SizeOf<T>();
-            return chunkSize * Array.MaxLength;
+            return nint.Size == 4 ? Array.MaxLength : chunkSize * Array.MaxLength;
         }
     }
 

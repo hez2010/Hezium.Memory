@@ -11,7 +11,7 @@ public sealed class HeziumMemoryApiTests
     {
         Assert.True(BigArray<int>.Empty.IsEmpty);
         Assert.Equal(0, BigArray<int>.Empty.Length);
-        Assert.True(BigArray<byte>.MaxLength > Array.MaxLength);
+        Assert.True(BigArray<byte>.MaxLength >= Array.MaxLength);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new BigArray<int>(-1));
         Assert.Throws<ArgumentOutOfRangeException>(() => new BigArray<byte>(BigArray<byte>.MaxLength + 1));
@@ -531,7 +531,7 @@ public sealed class HeziumMemoryApiTests
     [Fact]
     public void LargeLengthContract_IsExposedWithoutHugeAllocation()
     {
-        Assert.True(BigArray<byte>.MaxLength > Array.MaxLength);
+        Assert.True(BigArray<byte>.MaxLength >= Array.MaxLength);
 
         BigArray<byte> array = new(1024 * 1024);
         nint highIndex = array.Length - 1;
