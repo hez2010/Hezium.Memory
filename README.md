@@ -28,6 +28,14 @@ Console.WriteLine(buffer[5_000_000_000]); // 42
 
 `BigArray<T>` allocates on managed memory with GC support, so you can use it with reference types and it will be collected when no longer being used.
 
+For explicit GC-style allocation, use `GC.AllocateBigArray<T>()` or `GC.AllocateUninitializedBigArray<T>()`. Both APIs accept the same `pinned` option as the built-in `GC` array allocation helpers.
+
+```csharp
+BigArray<byte> zeroed = GC.AllocateBigArray<byte>(length);
+BigArray<byte> scratch = GC.AllocateUninitializedBigArray<byte>(length);
+BigArray<byte> pinned = GC.AllocateBigArray<byte>(length, pinned: true);
+```
+
 ## Why
 
 Some workloads are naturally one-dimensional and very large: columnar data, precomputed lookup tables, native interop buffers, generated datasets, simulation state, and file-backed processing pipelines. The important part is not only "can I allocate a lot of elements", but "can I keep using the same mental model when I do?"
@@ -273,6 +281,7 @@ Console.WriteLine(readOnlyReference); // 43
 | `BigSpan<T>` | Mutable `ref struct` view with `nint Length`, slicing, by-ref indexing, pinning, enumeration, copy/search/trim/split/sort helpers. |
 | `BigReadOnlySpan<T>` | Read-only `ref struct` view with slicing, by-readonly-ref indexing, pinning, enumeration, copy/search/trim/split helpers. |
 | `MemoryMarshal` extensions | `CreateBigSpan`, `GetReference(BigSpan<T>)`, and `GetReference(BigReadOnlySpan<T>)`. |
+| `GC` extensions | `AllocateBigArray<T>` and `AllocateUninitializedBigArray<T>` with optional pinned storage. |
 
 ## Requirements
 

@@ -33,9 +33,27 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         ArgumentOutOfRangeException.ThrowIfNegative(length);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaxLength);
 
-        if (length <= Array.MaxLength) _storage = new ElementChunk1[length];
+        if (length <= Array.MaxLength) _storage = new ElementChunk1<T>[length];
         else _storage = CreateBigArraySlow(length);
         _length = length;
+    }
+
+    private BigArray(Array storage, nint length)
+    {
+        _storage = storage;
+        _length = length;
+    }
+
+    internal static BigArray<T> Allocate(nint length, bool pinned, bool uninitialized)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaxLength);
+
+        Array storage = length <= Array.MaxLength
+            ? AllocateStorage<ElementChunk1<T>>((int)length, pinned, uninitialized)
+            : CreateBigArraySlow(length, pinned, uninitialized);
+
+        return new BigArray<T>(storage, length);
     }
 
     /// <summary>
@@ -91,8 +109,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            nint chunkSize = 65535 / Unsafe.SizeOf<T>();
-            return nint.Size == 4 ? Array.MaxLength : chunkSize * Array.MaxLength;
+            return nint.Size == 4 ? Array.MaxLength : GetChunkLength() * (nint)Array.MaxLength;
         }
     }
 

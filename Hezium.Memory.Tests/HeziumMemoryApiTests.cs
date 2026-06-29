@@ -1,5 +1,7 @@
 using System.Buffers;
 using System.Collections;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Hezium.Memory.Tests;
@@ -539,6 +541,95 @@ public sealed class HeziumMemoryApiTests
 
         Assert.Equal(123, array[highIndex]);
         Assert.Equal(123, array.AsBigSpan(highIndex, 1)[0]);
+    }
+
+    [Fact]
+    public void GC_BigArrayAllocationApis_Work()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => GC.AllocateBigArray<int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => GC.AllocateUninitializedBigArray<byte>(BigArray<byte>.MaxLength + 1));
+
+        BigArray<int> initialized = GC.AllocateBigArray<int>(3);
+
+        Assert.Equal(3, initialized.Length);
+        Assert.Equal([0, 0, 0], initialized.ToArray());
+
+        BigArray<int> uninitialized = GC.AllocateUninitializedBigArray<int>(3);
+
+        Assert.Equal(3, uninitialized.Length);
+        uninitialized[2] = 42;
+        Assert.Equal(42, uninitialized[2]);
+
+        BigArray<int> pinned = GC.AllocateBigArray<int>(3, pinned: true);
+
+        Assert.Equal(3, pinned.Length);
+        pinned[2] = 43;
+        Assert.Equal(43, pinned[2]);
+    }
+
+    [Fact]
+    public void BigArray_ChunkFactory_CoversEverySupportedElementSize()
+    {
+        MethodInfo createFactory = typeof(BigArray<byte>).GetMethod("CreateBigArrayFactory", BindingFlags.NonPublic | BindingFlags.Static, [typeof(int)])!;
+        HashSet<int> factoryLengths = [];
+
+        for (int elementSize = 1; elementSize <= 65535; elementSize++)
+        {
+            int chunkLength = 65535 / elementSize;
+
+            Assert.True((long)chunkLength * elementSize <= 65535);
+
+            if (factoryLengths.Add(chunkLength))
+            {
+                var factory = (Func<int, bool, bool, Array>)createFactory.Invoke(null, [chunkLength])!;
+                Array storage = factory(1, false, false);
+
+                Assert.True(storage.Length == 1);
+                Assert.Equal(chunkLength, SizeOfArrayElement(storage.GetType().GetElementType()!));
+            }
+        }
+
+        Assert.Equal(510, factoryLengths.Count);
+
+        Type[] elementChunkTypes = typeof(BigArray<byte>).Assembly.GetTypes()
+            .Where(type => type.Namespace == typeof(BigArray<byte>).Namespace)
+            .Where(type => type.Name.StartsWith("ElementChunk", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(85, elementChunkTypes.Length);
+
+        foreach (Type elementChunkType in elementChunkTypes)
+        {
+            string name = elementChunkType.Name;
+            int arityMarker = name.IndexOf('`');
+            int chunkLength = int.Parse(name["ElementChunk".Length..(arityMarker < 0 ? name.Length : arityMarker)]);
+
+            Assert.True(chunkLength == 1 || IsPrime(chunkLength));
+        }
+
+        static bool IsPrime(int value)
+        {
+            for (int divisor = 2; divisor * divisor <= value; divisor++)
+            {
+                if (value % divisor == 0)
+                {
+                    return false;
+                }
+            }
+
+            return value > 1;
+        }
+    }
+
+    private static int SizeOfArrayElement(Type elementType)
+    {
+        MethodInfo sizeOf = typeof(HeziumMemoryApiTests).GetMethod(nameof(SizeOf), BindingFlags.NonPublic | BindingFlags.Static)!;
+        return (int)sizeOf.MakeGenericMethod(elementType).Invoke(null, [])!;
+    }
+
+    private static int SizeOf<T>()
+    {
+        return Unsafe.SizeOf<T>();
     }
 
     private static T[] ToArray<T>(BigSpan<T> span)

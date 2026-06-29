@@ -2656,4 +2656,31 @@ public static class MemoryExtensions
             return IndexOfAnyExceptInRangeCore(span, lowInclusive, highInclusive) >= 0;
         }
     }
+
+    extension(GC)
+    {
+        /// <summary>
+        /// Allocates a zero-initialized <see cref="BigArray{T}"/> with the specified length.
+        /// </summary>
+        /// <param name="length">The number of elements in the array.</param>
+        /// <param name="pinned"><see langword="true"/> to allocate the underlying storage as pinned; otherwise, <see langword="false"/>.</param>
+        /// <returns>A zero-initialized <see cref="BigArray{T}"/> with the specified length.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative or greater than <see cref="BigArray{T}.MaxLength"/>.</exception>
+        public static BigArray<T> AllocateBigArray<T>(nint length, bool pinned = false)
+        {
+            return BigArray<T>.Allocate(length, pinned, uninitialized: false);
+        }
+
+        /// <summary>
+        /// Allocates a <see cref="BigArray{T}"/> with the specified length, leaving the underlying storage uninitialized when the runtime can do so.
+        /// </summary>
+        /// <param name="length">The number of elements in the array.</param>
+        /// <param name="pinned"><see langword="true"/> to allocate the underlying storage as pinned; otherwise, <see langword="false"/>.</param>
+        /// <returns>A <see cref="BigArray{T}"/> with the specified length.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative or greater than <see cref="BigArray{T}.MaxLength"/>.</exception>
+        public static BigArray<T> AllocateUninitializedBigArray<T>(nint length, bool pinned = false)
+        {
+            return BigArray<T>.Allocate(length, pinned, uninitialized: true);
+        }
+    }
 }
