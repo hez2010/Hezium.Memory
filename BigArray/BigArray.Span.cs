@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -143,6 +144,15 @@ public readonly ref struct BigSpan<T>
     }
 
     /// <summary>
+    /// Defines an implicit conversion from <see cref="Span{T}"/> to <see cref="BigSpan{T}"/>.
+    /// </summary>
+    /// <param name="span">The <see cref="Span{T}"/> to convert.</param>
+    public static implicit operator BigSpan<T>(Span<T> span)
+    {
+        return new BigSpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
+    }
+
+    /// <summary>
     /// Enumerates the elements of a <see cref="BigSpan{T}"/>.
     /// </summary>
     public ref struct Enumerator : IEnumerator<T>
@@ -252,6 +262,24 @@ public readonly ref struct BigReadOnlySpan<T>
     }
 
     /// <summary>
+    /// Defines an implicit conversion from <see cref="ReadOnlySpan{T}"/> to <see cref="BigReadOnlySpan{T}"/>.
+    /// </summary>
+    /// <param name="span">The <see cref="ReadOnlySpan{T}"/> to convert.</param>
+    public static implicit operator BigReadOnlySpan<T>(ReadOnlySpan<T> span)
+    {
+        return new BigReadOnlySpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
+    }
+
+    /// <summary>
+    /// Defines an implicit conversion from <see cref="Span{T}"/> to <see cref="BigReadOnlySpan{T}"/>.
+    /// </summary>
+    /// <param name="span">The <see cref="Span{T}"/> to convert.</param>
+    public static implicit operator BigReadOnlySpan<T>(Span<T> span)
+    {
+        return new BigReadOnlySpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
+    }
+
+    /// <summary>
     /// Creates a new <see cref="BigReadOnlySpan{T}"/> that represents a slice of the current span starting at the specified index.
     /// </summary>
     /// <param name="start">The index at which to start the slice.</param>
@@ -350,5 +378,135 @@ public readonly ref struct BigReadOnlySpan<T>
         {
             _offset = -1;
         }
+    }
+}
+
+/// <summary>
+/// Enumerates the segments produced by splitting a <see cref="BigReadOnlySpan{T}"/>.
+/// </summary>
+/// <typeparam name="T">The type of elements in each segment.</typeparam>
+public ref struct BigSpanSplitEnumerator<T>
+{
+    private BigReadOnlySpan<T> _remaining;
+    private readonly T _separator;
+    private readonly BigReadOnlySpan<T> _separators;
+    private readonly byte _mode;
+    private bool _finished;
+
+    internal BigSpanSplitEnumerator(BigReadOnlySpan<T> span, T separator)
+    {
+        _remaining = span;
+        _separator = separator;
+        _separators = default;
+        _mode = 0;
+        _finished = false;
+        Current = default;
+    }
+
+    internal BigSpanSplitEnumerator(BigReadOnlySpan<T> span, BigReadOnlySpan<T> separators)
+    {
+        _remaining = span;
+        _separator = default!;
+        _separators = separators;
+        _mode = 1;
+        _finished = false;
+        Current = default;
+    }
+
+    /// <summary>
+    /// Gets the segment at the current position of the enumerator.
+    /// </summary>
+    public BigReadOnlySpan<T> Current { get; private set; }
+
+    /// <summary>
+    /// Returns this enumerator.
+    /// </summary>
+    /// <returns>This enumerator.</returns>
+    public readonly BigSpanSplitEnumerator<T> GetEnumerator()
+    {
+        return this;
+    }
+
+    /// <summary>
+    /// Advances the enumerator to the next segment.
+    /// </summary>
+    /// <returns><see langword="true"/> if the enumerator was advanced; otherwise, <see langword="false"/>.</returns>
+    public bool MoveNext()
+    {
+        if (_finished) return false;
+
+        nint index = _mode switch
+        {
+            0 => _remaining.IndexOf(_separator),
+            _ => _remaining.IndexOfAny(_separators)
+        };
+
+        if (index < 0)
+        {
+            Current = _remaining;
+            _remaining = BigReadOnlySpan<T>.Empty;
+            _finished = true;
+            return true;
+        }
+
+        Current = _remaining.Slice(0, index);
+        _remaining = _remaining.Slice(index + 1);
+        return true;
+    }
+}
+
+/// <summary>
+/// Enumerates the segments produced by splitting a <see cref="BigReadOnlySpan{T}"/> with precomputed separator values.
+/// </summary>
+/// <typeparam name="T">The type of elements in each segment.</typeparam>
+public ref struct BigSpanSearchValuesSplitEnumerator<T>
+    where T : IEquatable<T>
+{
+    private BigReadOnlySpan<T> _remaining;
+    private readonly SearchValues<T> _separators;
+    private bool _finished;
+
+    internal BigSpanSearchValuesSplitEnumerator(BigReadOnlySpan<T> span, SearchValues<T> separators)
+    {
+        _remaining = span;
+        _separators = separators;
+        _finished = false;
+        Current = default;
+    }
+
+    /// <summary>
+    /// Gets the segment at the current position of the enumerator.
+    /// </summary>
+    public BigReadOnlySpan<T> Current { get; private set; }
+
+    /// <summary>
+    /// Returns this enumerator.
+    /// </summary>
+    /// <returns>This enumerator.</returns>
+    public readonly BigSpanSearchValuesSplitEnumerator<T> GetEnumerator()
+    {
+        return this;
+    }
+
+    /// <summary>
+    /// Advances the enumerator to the next segment.
+    /// </summary>
+    /// <returns><see langword="true"/> if the enumerator was advanced; otherwise, <see langword="false"/>.</returns>
+    public bool MoveNext()
+    {
+        if (_finished) return false;
+
+        nint index = _remaining.IndexOfAny(_separators);
+        if (index < 0)
+        {
+            Current = _remaining;
+            _remaining = BigReadOnlySpan<T>.Empty;
+            _finished = true;
+            return true;
+        }
+
+        Current = _remaining.Slice(0, index);
+        _remaining = _remaining.Slice(index + 1);
+        return true;
     }
 }

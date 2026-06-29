@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -238,6 +239,912 @@ public static class BigArrayExtensions
         return -1;
     }
 
+    private static nint BinarySearchCore<T, TComparable>(BigReadOnlySpan<T> span, TComparable comparable)
+        where TComparable : IComparable<T>
+    {
+        ArgumentNullException.ThrowIfNull(comparable);
+
+        if (span._length <= int.MaxValue)
+        {
+            return CreateReadOnlySpan(span, (int)span._length).BinarySearch(comparable);
+        }
+
+        nint low = 0;
+        nint high = span._length - 1;
+        ref T reference = ref Unsafe.AsRef(in span._first);
+        while (low <= high)
+        {
+            nint index = low + ((high - low) >> 1);
+            int comparison = comparable.CompareTo(Unsafe.Add(ref reference, index));
+            if (comparison == 0) return index;
+            if (comparison > 0) low = index + 1;
+            else high = index - 1;
+        }
+
+        return ~low;
+    }
+
+    private static nint BinarySearchCore<T, TComparer>(BigReadOnlySpan<T> span, T value, TComparer comparer)
+        where TComparer : IComparer<T>
+    {
+        ArgumentNullException.ThrowIfNull(comparer);
+
+        if (span._length <= int.MaxValue)
+        {
+            return CreateReadOnlySpan(span, (int)span._length).BinarySearch(value, comparer);
+        }
+
+        nint low = 0;
+        nint high = span._length - 1;
+        ref T reference = ref Unsafe.AsRef(in span._first);
+        while (low <= high)
+        {
+            nint index = low + ((high - low) >> 1);
+            int comparison = comparer.Compare(value, Unsafe.Add(ref reference, index));
+            if (comparison == 0) return index;
+            if (comparison > 0) low = index + 1;
+            else high = index - 1;
+        }
+
+        return ~low;
+    }
+
+    private static nint IndexOfAnyCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values)
+    {
+        if (values._length == 0) return -1;
+
+        nint offset = 0;
+        if (values._length <= int.MaxValue)
+        {
+            ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
+            while (span._length > 0)
+            {
+                int chunkLength = GetChunkLength(span._length);
+                int index = CreateReadOnlySpan(span, chunkLength).IndexOfAny(valueSpan);
+                if (index >= 0) return offset + index;
+
+                offset += chunkLength;
+                span = SliceUnchecked(span, chunkLength);
+            }
+
+            return -1;
+        }
+
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            ReadOnlySpan<T> chunk = CreateReadOnlySpan(span, chunkLength);
+            BigReadOnlySpan<T> remainingValues = values;
+            int bestIndex = -1;
+            while (remainingValues._length > 0)
+            {
+                int valueChunkLength = GetChunkLength(remainingValues._length);
+                int index = chunk.IndexOfAny(CreateReadOnlySpan(remainingValues, valueChunkLength));
+                if (index == 0) return offset;
+                if ((uint)index < (uint)bestIndex || bestIndex < 0) bestIndex = index;
+
+                remainingValues = SliceUnchecked(remainingValues, valueChunkLength);
+            }
+
+            if (bestIndex >= 0) return offset + bestIndex;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyCore<T>(BigReadOnlySpan<T> span, T value0, T value1)
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAny(value0, value1);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyCore<T>(BigReadOnlySpan<T> span, T value0, T value1, T value2)
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAny(value0, value1, value2);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyCore<T>(BigReadOnlySpan<T> span, SearchValues<T> values)
+        where T : IEquatable<T>
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAny(values);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values)
+    {
+        if (values._length == 0) return -1;
+
+        nint remaining = span._length;
+        if (values._length <= int.MaxValue)
+        {
+            ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
+            while (remaining > 0)
+            {
+                int chunkLength = GetChunkLength(remaining);
+                nint chunkStart = remaining - chunkLength;
+                int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAny(valueSpan);
+                if (index >= 0) return chunkStart + index;
+
+                remaining = chunkStart;
+            }
+
+            return -1;
+        }
+
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            ReadOnlySpan<T> chunk = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength);
+            BigReadOnlySpan<T> remainingValues = values;
+            int bestIndex = -1;
+            while (remainingValues._length > 0)
+            {
+                int valueChunkLength = GetChunkLength(remainingValues._length);
+                int index = chunk.LastIndexOfAny(CreateReadOnlySpan(remainingValues, valueChunkLength));
+                if (index == chunkLength - 1) return chunkStart + index;
+                if (index > bestIndex) bestIndex = index;
+
+                remainingValues = SliceUnchecked(remainingValues, valueChunkLength);
+            }
+
+            if (bestIndex >= 0) return chunkStart + bestIndex;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyCore<T>(BigReadOnlySpan<T> span, SearchValues<T> values)
+        where T : IEquatable<T>
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAny(values);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyCore<T>(BigReadOnlySpan<T> span, T value0, T value1)
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAny(value0, value1);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyCore<T>(BigReadOnlySpan<T> span, T value0, T value1, T value2)
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAny(value0, value1, value2);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, T value)
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(value);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values)
+    {
+        nint offset = 0;
+        if (values._length <= int.MaxValue)
+        {
+            ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
+            while (span._length > 0)
+            {
+                int chunkLength = GetChunkLength(span._length);
+                int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(valueSpan);
+                if (index >= 0) return offset + index;
+
+                offset += chunkLength;
+                span = SliceUnchecked(span, chunkLength);
+            }
+
+            return -1;
+        }
+
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            ReadOnlySpan<T> chunk = CreateReadOnlySpan(span, chunkLength);
+            for (int i = 0; i < chunk.Length; i++)
+            {
+                if (IndexOfCore(values, chunk[i], null) < 0) return offset + i;
+            }
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, T value0, T value1)
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(value0, value1);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, T value0, T value1, T value2)
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(value0, value1, value2);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, SearchValues<T> values)
+        where T : IEquatable<T>
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(values);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, T value)
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(value);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values)
+    {
+        nint remaining = span._length;
+        if (values._length <= int.MaxValue)
+        {
+            ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
+            while (remaining > 0)
+            {
+                int chunkLength = GetChunkLength(remaining);
+                nint chunkStart = remaining - chunkLength;
+                int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(valueSpan);
+                if (index >= 0) return chunkStart + index;
+
+                remaining = chunkStart;
+            }
+
+            return -1;
+        }
+
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            ReadOnlySpan<T> chunk = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength);
+            for (int i = chunk.Length - 1; i >= 0; i--)
+            {
+                if (IndexOfCore(values, chunk[i], null) < 0) return chunkStart + i;
+            }
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, T value0, T value1)
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(value0, value1);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, T value0, T value1, T value2)
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(value0, value1, value2);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, SearchValues<T> values)
+        where T : IEquatable<T>
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(values);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyInRangeCore<T>(BigReadOnlySpan<T> span, T lowInclusive, T highInclusive)
+        where T : IComparable<T>
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyInRange(lowInclusive, highInclusive);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyInRangeCore<T>(BigReadOnlySpan<T> span, T lowInclusive, T highInclusive)
+        where T : IComparable<T>
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyInRange(lowInclusive, highInclusive);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint IndexOfAnyExceptInRangeCore<T>(BigReadOnlySpan<T> span, T lowInclusive, T highInclusive)
+        where T : IComparable<T>
+    {
+        nint offset = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExceptInRange(lowInclusive, highInclusive);
+            if (index >= 0) return offset + index;
+
+            offset += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return -1;
+    }
+
+    private static nint LastIndexOfAnyExceptInRangeCore<T>(BigReadOnlySpan<T> span, T lowInclusive, T highInclusive)
+        where T : IComparable<T>
+    {
+        nint remaining = span._length;
+        while (remaining > 0)
+        {
+            int chunkLength = GetChunkLength(remaining);
+            nint chunkStart = remaining - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExceptInRange(lowInclusive, highInclusive);
+            if (index >= 0) return chunkStart + index;
+
+            remaining = chunkStart;
+        }
+
+        return -1;
+    }
+
+    private static nint CountTrimStartCore<T>(BigReadOnlySpan<T> span, T trimElement)
+    {
+        nint trimmed = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(trimElement);
+            if (index >= 0) return trimmed + index;
+
+            trimmed += chunkLength;
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return trimmed;
+    }
+
+    private static nint CountTrimStartCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
+    {
+        nint trimmed = 0;
+        if (trimElements._length <= int.MaxValue)
+        {
+            ReadOnlySpan<T> trimElementSpan = CreateReadOnlySpan(trimElements, (int)trimElements._length);
+            while (span._length > 0)
+            {
+                int chunkLength = GetChunkLength(span._length);
+                int index = CreateReadOnlySpan(span, chunkLength).IndexOfAnyExcept(trimElementSpan);
+                if (index >= 0) return trimmed + index;
+
+                trimmed += chunkLength;
+                span = SliceUnchecked(span, chunkLength);
+            }
+
+            return trimmed;
+        }
+
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            ReadOnlySpan<T> chunk = CreateReadOnlySpan(span, chunkLength);
+            for (int i = 0; i < chunk.Length; i++)
+            {
+                if (IndexOfCore(trimElements, chunk[i], null) < 0) return trimmed + i;
+            }
+
+            trimmed += chunkLength;
+
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return trimmed;
+    }
+
+    private static nint CountTrimEndCore<T>(BigReadOnlySpan<T> span, T trimElement)
+    {
+        nint trimmed = 0;
+        nint remainingLength = span._length;
+        while (remainingLength > 0)
+        {
+            int chunkLength = GetChunkLength(remainingLength);
+            nint chunkStart = remainingLength - chunkLength;
+            int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(trimElement);
+            if (index >= 0) return trimmed + (chunkLength - 1 - index);
+
+            trimmed += chunkLength;
+            remainingLength = chunkStart;
+        }
+
+        return trimmed;
+    }
+
+    private static nint CountTrimEndCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
+    {
+        nint trimmed = 0;
+        nint remainingLength = span._length;
+        if (trimElements._length <= int.MaxValue)
+        {
+            ReadOnlySpan<T> trimElementSpan = CreateReadOnlySpan(trimElements, (int)trimElements._length);
+            while (remainingLength > 0)
+            {
+                int chunkLength = GetChunkLength(remainingLength);
+                nint chunkStart = remainingLength - chunkLength;
+                int index = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength).LastIndexOfAnyExcept(trimElementSpan);
+                if (index >= 0) return trimmed + (chunkLength - 1 - index);
+
+                trimmed += chunkLength;
+                remainingLength = chunkStart;
+            }
+
+            return trimmed;
+        }
+
+        while (remainingLength > 0)
+        {
+            int chunkLength = GetChunkLength(remainingLength);
+            nint chunkStart = remainingLength - chunkLength;
+            ReadOnlySpan<T> chunk = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength);
+            for (int i = chunk.Length - 1; i >= 0; i--)
+            {
+                if (IndexOfCore(trimElements, chunk[i], null) < 0) return trimmed + (chunk.Length - 1 - i);
+            }
+
+            trimmed += chunkLength;
+
+            remainingLength = chunkStart;
+        }
+
+        return trimmed;
+    }
+
+    private static BigReadOnlySpan<T> TrimStartCore<T>(BigReadOnlySpan<T> span, T trimElement)
+    {
+        return SliceUnchecked(span, CountTrimStartCore(span, trimElement));
+    }
+
+    private static BigReadOnlySpan<T> TrimStartCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
+    {
+        return SliceUnchecked(span, CountTrimStartCore(span, trimElements));
+    }
+
+    private static BigReadOnlySpan<T> TrimEndCore<T>(BigReadOnlySpan<T> span, T trimElement)
+    {
+        return SliceUnchecked(span, 0, span._length - CountTrimEndCore(span, trimElement));
+    }
+
+    private static BigReadOnlySpan<T> TrimEndCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
+    {
+        return SliceUnchecked(span, 0, span._length - CountTrimEndCore(span, trimElements));
+    }
+
+    private static BigReadOnlySpan<T> TrimCore<T>(BigReadOnlySpan<T> span, T trimElement)
+    {
+        nint start = CountTrimStartCore(span, trimElement);
+        nint end = CountTrimEndCore(SliceUnchecked(span, start), trimElement);
+        return SliceUnchecked(span, start, span._length - start - end);
+    }
+
+    private static BigReadOnlySpan<T> TrimCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
+    {
+        nint start = CountTrimStartCore(span, trimElements);
+        nint end = CountTrimEndCore(SliceUnchecked(span, start), trimElements);
+        return SliceUnchecked(span, start, span._length - start - end);
+    }
+
+    private static void SortCore<T>(BigSpan<T> span)
+    {
+        if (span._length <= 1) return;
+        if (span._length <= int.MaxValue)
+        {
+            CreateSpan(span, (int)span._length).Sort();
+            return;
+        }
+
+        SortChunks(span);
+        SortMergedRuns(span, Comparer<T>.Default);
+    }
+
+    private static void SortCore<T>(BigSpan<T> span, IComparer<T>? comparer)
+    {
+        if (span._length <= 1) return;
+        comparer ??= Comparer<T>.Default;
+
+        if (span._length <= int.MaxValue)
+        {
+            CreateSpan(span, (int)span._length).Sort(comparer);
+            return;
+        }
+
+        SortChunks(span, comparer);
+        SortMergedRuns(span, comparer);
+    }
+
+    private static void SortCore<T>(BigSpan<T> span, Comparison<T> comparison)
+    {
+        if (span._length <= 1) return;
+        if (span._length <= int.MaxValue)
+        {
+            CreateSpan(span, (int)span._length).Sort(comparison);
+            return;
+        }
+
+        SortChunks(span, comparison);
+        SortMergedRuns(span, comparison);
+    }
+
+    private static void SortChunks<T>(BigSpan<T> span)
+    {
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            CreateSpan(span, chunkLength).Sort();
+            span = SliceUnchecked(span, chunkLength);
+        }
+    }
+
+    private static void SortChunks<T>(BigSpan<T> span, IComparer<T> comparer)
+    {
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            CreateSpan(span, chunkLength).Sort(comparer);
+            span = SliceUnchecked(span, chunkLength);
+        }
+    }
+
+    private static void SortChunks<T>(BigSpan<T> span, Comparison<T> comparison)
+    {
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            CreateSpan(span, chunkLength).Sort(comparison);
+            span = SliceUnchecked(span, chunkLength);
+        }
+    }
+
+    private static void SortMergedRuns<T>(BigSpan<T> span, IComparer<T> comparer)
+    {
+        BigArray<T> buffer = new(span._length);
+        BigSpan<T> source = span;
+        BigSpan<T> destination = buffer.AsBigSpan();
+        bool sourceIsScratch = false;
+
+        for (nint width = Array.MaxLength; width < span._length;)
+        {
+            MergePass(source, destination, width, comparer);
+            BigSpan<T> previousSource = source;
+            source = destination;
+            destination = previousSource;
+            sourceIsScratch = !sourceIsScratch;
+
+            if (width > span._length / 2) break;
+            width *= 2;
+        }
+
+        if (sourceIsScratch)
+        {
+            CopyToCore(AsReadOnlySpan(source), span);
+        }
+
+        GC.KeepAlive(buffer);
+    }
+
+    private static void SortMergedRuns<T>(BigSpan<T> span, Comparison<T> comparison)
+    {
+        BigArray<T> buffer = new(span._length);
+        BigSpan<T> source = span;
+        BigSpan<T> destination = buffer.AsBigSpan();
+        bool sourceIsScratch = false;
+
+        for (nint width = Array.MaxLength; width < span._length;)
+        {
+            MergePass(source, destination, width, comparison);
+            BigSpan<T> previousSource = source;
+            source = destination;
+            destination = previousSource;
+            sourceIsScratch = !sourceIsScratch;
+
+            if (width > span._length / 2) break;
+            width *= 2;
+        }
+
+        if (sourceIsScratch)
+        {
+            CopyToCore(AsReadOnlySpan(source), span);
+        }
+
+        GC.KeepAlive(buffer);
+    }
+
+    private static void MergePass<T>(BigSpan<T> source, BigSpan<T> destination, nint width, IComparer<T> comparer)
+    {
+        nint start = 0;
+        while (start < source._length)
+        {
+            nint remaining = source._length - start;
+            nint leftLength = remaining < width ? remaining : width;
+            remaining -= leftLength;
+            nint rightLength = remaining < width ? remaining : width;
+            nint length = leftLength + rightLength;
+
+            if (rightLength == 0)
+            {
+                CopyToCore(AsReadOnlySpan(SliceUnchecked(source, start, leftLength)), SliceUnchecked(destination, start, leftLength));
+            }
+            else
+            {
+                MergeRuns(
+                    AsReadOnlySpan(SliceUnchecked(source, start, leftLength)),
+                    AsReadOnlySpan(SliceUnchecked(source, start + leftLength, rightLength)),
+                    SliceUnchecked(destination, start, length),
+                    comparer);
+            }
+
+            start += length;
+        }
+    }
+
+    private static void MergePass<T>(BigSpan<T> source, BigSpan<T> destination, nint width, Comparison<T> comparison)
+    {
+        nint start = 0;
+        while (start < source._length)
+        {
+            nint remaining = source._length - start;
+            nint leftLength = remaining < width ? remaining : width;
+            remaining -= leftLength;
+            nint rightLength = remaining < width ? remaining : width;
+            nint length = leftLength + rightLength;
+
+            if (rightLength == 0)
+            {
+                CopyToCore(AsReadOnlySpan(SliceUnchecked(source, start, leftLength)), SliceUnchecked(destination, start, leftLength));
+            }
+            else
+            {
+                MergeRuns(
+                    AsReadOnlySpan(SliceUnchecked(source, start, leftLength)),
+                    AsReadOnlySpan(SliceUnchecked(source, start + leftLength, rightLength)),
+                    SliceUnchecked(destination, start, length),
+                    comparison);
+            }
+
+            start += length;
+        }
+    }
+
+    private static void MergeRuns<T>(BigReadOnlySpan<T> left, BigReadOnlySpan<T> right, BigSpan<T> destination, IComparer<T> comparer)
+    {
+        nint leftIndex = 0;
+        nint rightIndex = 0;
+        nint destinationIndex = 0;
+        ref T leftReference = ref Unsafe.AsRef(in left._first);
+        ref T rightReference = ref Unsafe.AsRef(in right._first);
+        ref T destinationReference = ref destination._first;
+
+        while (leftIndex < left._length && rightIndex < right._length)
+        {
+            ref T leftValue = ref Unsafe.Add(ref leftReference, leftIndex);
+            ref T rightValue = ref Unsafe.Add(ref rightReference, rightIndex);
+            if (comparer.Compare(leftValue, rightValue) <= 0)
+            {
+                Unsafe.Add(ref destinationReference, destinationIndex) = leftValue;
+                leftIndex++;
+            }
+            else
+            {
+                Unsafe.Add(ref destinationReference, destinationIndex) = rightValue;
+                rightIndex++;
+            }
+
+            destinationIndex++;
+        }
+
+        if (leftIndex < left._length)
+        {
+            CopyToCore(SliceUnchecked(left, leftIndex), SliceUnchecked(destination, destinationIndex, left._length - leftIndex));
+        }
+        else if (rightIndex < right._length)
+        {
+            CopyToCore(SliceUnchecked(right, rightIndex), SliceUnchecked(destination, destinationIndex, right._length - rightIndex));
+        }
+    }
+
+    private static void MergeRuns<T>(BigReadOnlySpan<T> left, BigReadOnlySpan<T> right, BigSpan<T> destination, Comparison<T> comparison)
+    {
+        nint leftIndex = 0;
+        nint rightIndex = 0;
+        nint destinationIndex = 0;
+        ref T leftReference = ref Unsafe.AsRef(in left._first);
+        ref T rightReference = ref Unsafe.AsRef(in right._first);
+        ref T destinationReference = ref destination._first;
+
+        while (leftIndex < left._length && rightIndex < right._length)
+        {
+            ref T leftValue = ref Unsafe.Add(ref leftReference, leftIndex);
+            ref T rightValue = ref Unsafe.Add(ref rightReference, rightIndex);
+            if (comparison(leftValue, rightValue) <= 0)
+            {
+                Unsafe.Add(ref destinationReference, destinationIndex) = leftValue;
+                leftIndex++;
+            }
+            else
+            {
+                Unsafe.Add(ref destinationReference, destinationIndex) = rightValue;
+                rightIndex++;
+            }
+
+            destinationIndex++;
+        }
+
+        if (leftIndex < left._length)
+        {
+            CopyToCore(SliceUnchecked(left, leftIndex), SliceUnchecked(destination, destinationIndex, left._length - leftIndex));
+        }
+        else if (rightIndex < right._length)
+        {
+            CopyToCore(SliceUnchecked(right, rightIndex), SliceUnchecked(destination, destinationIndex, right._length - rightIndex));
+        }
+    }
+
     private static bool StartsWithCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
     {
         return value._length <= span._length && SequenceEqualCore(SliceUnchecked(span, 0, value._length), value, comparer);
@@ -340,6 +1247,33 @@ public static class BigArrayExtensions
         public bool Contains(T value, IEqualityComparer<T>? comparer = null)
         {
             return array.AsBigSpan().Contains(value, comparer);
+        }
+
+        /// <summary>
+        /// Searches the sorted array for a value using the specified comparable object.
+        /// </summary>
+        /// <typeparam name="TComparable">The type that compares the target value with array elements.</typeparam>
+        /// <param name="comparable">The comparable object to use when searching.</param>
+        /// <returns>The index of the matching value, or the bitwise complement of the insertion index if no match is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparable"/> is <see langword="null"/>.</exception>
+        public nint BinarySearch<TComparable>(TComparable comparable)
+            where TComparable : IComparable<T>
+        {
+            return array.AsBigSpan().BinarySearch(comparable);
+        }
+
+        /// <summary>
+        /// Searches the sorted array for a value using the specified comparer.
+        /// </summary>
+        /// <typeparam name="TComparer">The type of comparer to use.</typeparam>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use when searching.</param>
+        /// <returns>The index of <paramref name="value"/>, or the bitwise complement of the insertion index if no match is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparer"/> is <see langword="null"/>.</exception>
+        public nint BinarySearch<TComparer>(T value, TComparer comparer)
+            where TComparer : IComparer<T>
+        {
+            return array.AsBigSpan().BinarySearch(value, comparer);
         }
     }
 
@@ -455,6 +1389,120 @@ public static class BigArrayExtensions
         }
 
         /// <summary>
+        /// Splits the current span using the specified separator.
+        /// </summary>
+        /// <param name="separator">The separator to split on.</param>
+        /// <returns>An enumerator over the split segments.</returns>
+        public BigSpanSplitEnumerator<T> Split(T separator)
+        {
+            return new BigSpanSplitEnumerator<T>(AsReadOnlySpan(span), separator);
+        }
+
+        /// <summary>
+        /// Splits the current span using any of the specified separators.
+        /// </summary>
+        /// <param name="separators">The separators to split on.</param>
+        /// <returns>An enumerator over the split segments.</returns>
+        public BigSpanSplitEnumerator<T> SplitAny(BigReadOnlySpan<T> separators)
+        {
+            return new BigSpanSplitEnumerator<T>(AsReadOnlySpan(span), separators);
+        }
+
+        /// <summary>
+        /// Removes all leading and trailing occurrences of the specified element from the current span.
+        /// </summary>
+        /// <param name="trimElement">The element to remove.</param>
+        /// <returns>A span with leading and trailing occurrences of <paramref name="trimElement"/> removed.</returns>
+        public BigSpan<T> Trim(T trimElement)
+        {
+            BigReadOnlySpan<T> readOnlySpan = AsReadOnlySpan(span);
+            nint start = CountTrimStartCore(readOnlySpan, trimElement);
+            nint end = CountTrimEndCore(SliceUnchecked(readOnlySpan, start), trimElement);
+            return SliceUnchecked(span, start, span._length - start - end);
+        }
+
+        /// <summary>
+        /// Removes all leading and trailing occurrences of the specified elements from the current span.
+        /// </summary>
+        /// <param name="trimElements">The elements to remove.</param>
+        /// <returns>A span with leading and trailing occurrences of any element in <paramref name="trimElements"/> removed.</returns>
+        public BigSpan<T> Trim(BigReadOnlySpan<T> trimElements)
+        {
+            BigReadOnlySpan<T> readOnlySpan = AsReadOnlySpan(span);
+            nint start = CountTrimStartCore(readOnlySpan, trimElements);
+            nint end = CountTrimEndCore(SliceUnchecked(readOnlySpan, start), trimElements);
+            return SliceUnchecked(span, start, span._length - start - end);
+        }
+
+        /// <summary>
+        /// Removes all leading occurrences of the specified element from the current span.
+        /// </summary>
+        /// <param name="trimElement">The element to remove.</param>
+        /// <returns>A span with leading occurrences of <paramref name="trimElement"/> removed.</returns>
+        public BigSpan<T> TrimStart(T trimElement)
+        {
+            return SliceUnchecked(span, CountTrimStartCore(AsReadOnlySpan(span), trimElement));
+        }
+
+        /// <summary>
+        /// Removes all leading occurrences of the specified elements from the current span.
+        /// </summary>
+        /// <param name="trimElements">The elements to remove.</param>
+        /// <returns>A span with leading occurrences of any element in <paramref name="trimElements"/> removed.</returns>
+        public BigSpan<T> TrimStart(BigReadOnlySpan<T> trimElements)
+        {
+            return SliceUnchecked(span, CountTrimStartCore(AsReadOnlySpan(span), trimElements));
+        }
+
+        /// <summary>
+        /// Removes all trailing occurrences of the specified element from the current span.
+        /// </summary>
+        /// <param name="trimElement">The element to remove.</param>
+        /// <returns>A span with trailing occurrences of <paramref name="trimElement"/> removed.</returns>
+        public BigSpan<T> TrimEnd(T trimElement)
+        {
+            return SliceUnchecked(span, 0, span._length - CountTrimEndCore(AsReadOnlySpan(span), trimElement));
+        }
+
+        /// <summary>
+        /// Removes all trailing occurrences of the specified elements from the current span.
+        /// </summary>
+        /// <param name="trimElements">The elements to remove.</param>
+        /// <returns>A span with trailing occurrences of any element in <paramref name="trimElements"/> removed.</returns>
+        public BigSpan<T> TrimEnd(BigReadOnlySpan<T> trimElements)
+        {
+            return SliceUnchecked(span, 0, span._length - CountTrimEndCore(AsReadOnlySpan(span), trimElements));
+        }
+
+        /// <summary>
+        /// Sorts the elements in the current span.
+        /// </summary>
+        public void Sort()
+        {
+            SortCore(span);
+        }
+
+        /// <summary>
+        /// Sorts the elements in the current span using the specified comparer.
+        /// </summary>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default comparer.</param>
+        public void Sort(IComparer<T>? comparer)
+        {
+            SortCore(span, comparer);
+        }
+
+        /// <summary>
+        /// Sorts the elements in the current span using the specified comparison.
+        /// </summary>
+        /// <param name="comparison">The comparison to use.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparison"/> is <see langword="null"/>.</exception>
+        public void Sort(Comparison<T> comparison)
+        {
+            ArgumentNullException.ThrowIfNull(comparison);
+            SortCore(span, comparison);
+        }
+
+        /// <summary>
         /// Searches for the specified value and returns the index of its first occurrence.
         /// </summary>
         /// <param name="value">The value to locate.</param>
@@ -485,6 +1533,261 @@ public static class BigArrayExtensions
         public bool Contains(T value, IEqualityComparer<T>? comparer = null)
         {
             return IndexOfCore(AsReadOnlySpan(span), value, comparer) >= 0;
+        }
+
+        /// <summary>
+        /// Searches the sorted span for a value using the specified comparable object.
+        /// </summary>
+        /// <typeparam name="TComparable">The type that compares the target value with span elements.</typeparam>
+        /// <param name="comparable">The comparable object to use when searching.</param>
+        /// <returns>The index of the matching value, or the bitwise complement of the insertion index if no match is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparable"/> is <see langword="null"/>.</exception>
+        public nint BinarySearch<TComparable>(TComparable comparable)
+            where TComparable : IComparable<T>
+        {
+            return BinarySearchCore(AsReadOnlySpan(span), comparable);
+        }
+
+        /// <summary>
+        /// Searches the sorted span for a value using the specified comparer.
+        /// </summary>
+        /// <typeparam name="TComparer">The type of comparer to use.</typeparam>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use when searching.</param>
+        /// <returns>The index of <paramref name="value"/>, or the bitwise complement of the insertion index if no match is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparer"/> is <see langword="null"/>.</exception>
+        public nint BinarySearch<TComparer>(T value, TComparer comparer)
+            where TComparer : IComparer<T>
+        {
+            return BinarySearchCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to locate.</param>
+        /// <returns>The index of the first occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        public nint IndexOfAny(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of either of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <returns>The index of the first occurrence of either value, or -1 if neither is found.</returns>
+        public nint IndexOfAny(T value0, T value1)
+        {
+            return IndexOfAnyCore(AsReadOnlySpan(span), value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <param name="value2">The third value to locate.</param>
+        /// <returns>The index of the first occurrence of any value, or -1 if none are found.</returns>
+        public nint IndexOfAny(T value0, T value1, T value2)
+        {
+            return IndexOfAnyCore(AsReadOnlySpan(span), value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to locate.</param>
+        /// <returns>The index of the last occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        public nint LastIndexOfAny(BigReadOnlySpan<T> values)
+        {
+            return LastIndexOfAnyCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of either of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <returns>The index of the last occurrence of either value, or -1 if neither is found.</returns>
+        public nint LastIndexOfAny(T value0, T value1)
+        {
+            return LastIndexOfAnyCore(AsReadOnlySpan(span), value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <param name="value2">The third value to locate.</param>
+        /// <returns>The index of the last occurrence of any value, or -1 if none are found.</returns>
+        public nint LastIndexOfAny(T value0, T value1, T value2)
+        {
+            return LastIndexOfAnyCore(AsReadOnlySpan(span), value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to locate.</param>
+        /// <returns><see langword="true"/> if any value in <paramref name="values"/> is found; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAny(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyCore(AsReadOnlySpan(span), values) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the span contains either of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <returns><see langword="true"/> if either value is found; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAny(T value0, T value1)
+        {
+            return IndexOfAnyCore(AsReadOnlySpan(span), value0, value1) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <param name="value2">The third value to locate.</param>
+        /// <returns><see langword="true"/> if any value is found; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAny(T value0, T value1, T value2)
+        {
+            return IndexOfAnyCore(AsReadOnlySpan(span), value0, value1, value2) >= 0;
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified value.
+        /// </summary>
+        /// <param name="value">The value to exclude.</param>
+        /// <returns>The index of the first value other than <paramref name="value"/>, or -1 if all values match.</returns>
+        public nint IndexOfAnyExcept(T value)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), value);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="values">The values to exclude.</param>
+        /// <returns>The index of the first value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        public nint IndexOfAnyExcept(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <returns>The index of the first value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint IndexOfAnyExcept(T value0, T value1)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <param name="value2">The third value to exclude.</param>
+        /// <returns>The index of the first value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint IndexOfAnyExcept(T value0, T value1, T value2)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified value.
+        /// </summary>
+        /// <param name="value">The value to exclude.</param>
+        /// <returns>The index of the last value other than <paramref name="value"/>, or -1 if all values match.</returns>
+        public nint LastIndexOfAnyExcept(T value)
+        {
+            return LastIndexOfAnyExceptCore(AsReadOnlySpan(span), value);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="values">The values to exclude.</param>
+        /// <returns>The index of the last value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        public nint LastIndexOfAnyExcept(BigReadOnlySpan<T> values)
+        {
+            return LastIndexOfAnyExceptCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <returns>The index of the last value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint LastIndexOfAnyExcept(T value0, T value1)
+        {
+            return LastIndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <param name="value2">The third value to exclude.</param>
+        /// <returns>The index of the last value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint LastIndexOfAnyExcept(T value0, T value1, T value2)
+        {
+            return LastIndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value other than the specified value.
+        /// </summary>
+        /// <param name="value">The value to exclude.</param>
+        /// <returns><see langword="true"/> if any value differs from <paramref name="value"/>; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(T value)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), value) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value other than the specified values.
+        /// </summary>
+        /// <param name="values">The values to exclude.</param>
+        /// <returns><see langword="true"/> if any value is not in <paramref name="values"/>; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), values) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <returns><see langword="true"/> if any value differs from the specified values; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(T value0, T value1)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <param name="value2">The third value to exclude.</param>
+        /// <returns><see langword="true"/> if any value differs from the specified values; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(T value0, T value1, T value2)
+        {
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1, value2) >= 0;
         }
 
         /// <summary>
@@ -635,6 +1938,86 @@ public static class BigArrayExtensions
         }
 
         /// <summary>
+        /// Splits the current read-only span using the specified separator.
+        /// </summary>
+        /// <param name="separator">The separator to split on.</param>
+        /// <returns>An enumerator over the split segments.</returns>
+        public BigSpanSplitEnumerator<T> Split(T separator)
+        {
+            return new BigSpanSplitEnumerator<T>(span, separator);
+        }
+
+        /// <summary>
+        /// Splits the current read-only span using any of the specified separators.
+        /// </summary>
+        /// <param name="separators">The separators to split on.</param>
+        /// <returns>An enumerator over the split segments.</returns>
+        public BigSpanSplitEnumerator<T> SplitAny(BigReadOnlySpan<T> separators)
+        {
+            return new BigSpanSplitEnumerator<T>(span, separators);
+        }
+
+        /// <summary>
+        /// Removes all leading and trailing occurrences of the specified element from the current read-only span.
+        /// </summary>
+        /// <param name="trimElement">The element to remove.</param>
+        /// <returns>A read-only span with leading and trailing occurrences of <paramref name="trimElement"/> removed.</returns>
+        public BigReadOnlySpan<T> Trim(T trimElement)
+        {
+            return TrimCore(span, trimElement);
+        }
+
+        /// <summary>
+        /// Removes all leading and trailing occurrences of the specified elements from the current read-only span.
+        /// </summary>
+        /// <param name="trimElements">The elements to remove.</param>
+        /// <returns>A read-only span with leading and trailing occurrences of any element in <paramref name="trimElements"/> removed.</returns>
+        public BigReadOnlySpan<T> Trim(BigReadOnlySpan<T> trimElements)
+        {
+            return TrimCore(span, trimElements);
+        }
+
+        /// <summary>
+        /// Removes all leading occurrences of the specified element from the current read-only span.
+        /// </summary>
+        /// <param name="trimElement">The element to remove.</param>
+        /// <returns>A read-only span with leading occurrences of <paramref name="trimElement"/> removed.</returns>
+        public BigReadOnlySpan<T> TrimStart(T trimElement)
+        {
+            return TrimStartCore(span, trimElement);
+        }
+
+        /// <summary>
+        /// Removes all leading occurrences of the specified elements from the current read-only span.
+        /// </summary>
+        /// <param name="trimElements">The elements to remove.</param>
+        /// <returns>A read-only span with leading occurrences of any element in <paramref name="trimElements"/> removed.</returns>
+        public BigReadOnlySpan<T> TrimStart(BigReadOnlySpan<T> trimElements)
+        {
+            return TrimStartCore(span, trimElements);
+        }
+
+        /// <summary>
+        /// Removes all trailing occurrences of the specified element from the current read-only span.
+        /// </summary>
+        /// <param name="trimElement">The element to remove.</param>
+        /// <returns>A read-only span with trailing occurrences of <paramref name="trimElement"/> removed.</returns>
+        public BigReadOnlySpan<T> TrimEnd(T trimElement)
+        {
+            return TrimEndCore(span, trimElement);
+        }
+
+        /// <summary>
+        /// Removes all trailing occurrences of the specified elements from the current read-only span.
+        /// </summary>
+        /// <param name="trimElements">The elements to remove.</param>
+        /// <returns>A read-only span with trailing occurrences of any element in <paramref name="trimElements"/> removed.</returns>
+        public BigReadOnlySpan<T> TrimEnd(BigReadOnlySpan<T> trimElements)
+        {
+            return TrimEndCore(span, trimElements);
+        }
+
+        /// <summary>
         /// Searches for the specified value and returns the index of its first occurrence.
         /// </summary>
         /// <param name="value">The value to locate.</param>
@@ -665,6 +2048,261 @@ public static class BigArrayExtensions
         public bool Contains(T value, IEqualityComparer<T>? comparer = null)
         {
             return IndexOfCore(span, value, comparer) >= 0;
+        }
+
+        /// <summary>
+        /// Searches the sorted read-only span for a value using the specified comparable object.
+        /// </summary>
+        /// <typeparam name="TComparable">The type that compares the target value with span elements.</typeparam>
+        /// <param name="comparable">The comparable object to use when searching.</param>
+        /// <returns>The index of the matching value, or the bitwise complement of the insertion index if no match is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparable"/> is <see langword="null"/>.</exception>
+        public nint BinarySearch<TComparable>(TComparable comparable)
+            where TComparable : IComparable<T>
+        {
+            return BinarySearchCore(span, comparable);
+        }
+
+        /// <summary>
+        /// Searches the sorted read-only span for a value using the specified comparer.
+        /// </summary>
+        /// <typeparam name="TComparer">The type of comparer to use.</typeparam>
+        /// <param name="value">The value to locate.</param>
+        /// <param name="comparer">The comparer to use when searching.</param>
+        /// <returns>The index of <paramref name="value"/>, or the bitwise complement of the insertion index if no match is found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparer"/> is <see langword="null"/>.</exception>
+        public nint BinarySearch<TComparer>(T value, TComparer comparer)
+            where TComparer : IComparer<T>
+        {
+            return BinarySearchCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to locate.</param>
+        /// <returns>The index of the first occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        public nint IndexOfAny(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyCore(span, values);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of either of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <returns>The index of the first occurrence of either value, or -1 if neither is found.</returns>
+        public nint IndexOfAny(T value0, T value1)
+        {
+            return IndexOfAnyCore(span, value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <param name="value2">The third value to locate.</param>
+        /// <returns>The index of the first occurrence of any value, or -1 if none are found.</returns>
+        public nint IndexOfAny(T value0, T value1, T value2)
+        {
+            return IndexOfAnyCore(span, value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to locate.</param>
+        /// <returns>The index of the last occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        public nint LastIndexOfAny(BigReadOnlySpan<T> values)
+        {
+            return LastIndexOfAnyCore(span, values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of either of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <returns>The index of the last occurrence of either value, or -1 if neither is found.</returns>
+        public nint LastIndexOfAny(T value0, T value1)
+        {
+            return LastIndexOfAnyCore(span, value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <param name="value2">The third value to locate.</param>
+        /// <returns>The index of the last occurrence of any value, or -1 if none are found.</returns>
+        public nint LastIndexOfAny(T value0, T value1, T value2)
+        {
+            return LastIndexOfAnyCore(span, value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to locate.</param>
+        /// <returns><see langword="true"/> if any value in <paramref name="values"/> is found; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAny(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyCore(span, values) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains either of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <returns><see langword="true"/> if either value is found; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAny(T value0, T value1)
+        {
+            return IndexOfAnyCore(span, value0, value1) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any of the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to locate.</param>
+        /// <param name="value1">The second value to locate.</param>
+        /// <param name="value2">The third value to locate.</param>
+        /// <returns><see langword="true"/> if any value is found; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAny(T value0, T value1, T value2)
+        {
+            return IndexOfAnyCore(span, value0, value1, value2) >= 0;
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified value.
+        /// </summary>
+        /// <param name="value">The value to exclude.</param>
+        /// <returns>The index of the first value other than <paramref name="value"/>, or -1 if all values match.</returns>
+        public nint IndexOfAnyExcept(T value)
+        {
+            return IndexOfAnyExceptCore(span, value);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="values">The values to exclude.</param>
+        /// <returns>The index of the first value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        public nint IndexOfAnyExcept(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyExceptCore(span, values);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <returns>The index of the first value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint IndexOfAnyExcept(T value0, T value1)
+        {
+            return IndexOfAnyExceptCore(span, value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <param name="value2">The third value to exclude.</param>
+        /// <returns>The index of the first value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint IndexOfAnyExcept(T value0, T value1, T value2)
+        {
+            return IndexOfAnyExceptCore(span, value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified value.
+        /// </summary>
+        /// <param name="value">The value to exclude.</param>
+        /// <returns>The index of the last value other than <paramref name="value"/>, or -1 if all values match.</returns>
+        public nint LastIndexOfAnyExcept(T value)
+        {
+            return LastIndexOfAnyExceptCore(span, value);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="values">The values to exclude.</param>
+        /// <returns>The index of the last value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        public nint LastIndexOfAnyExcept(BigReadOnlySpan<T> values)
+        {
+            return LastIndexOfAnyExceptCore(span, values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <returns>The index of the last value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint LastIndexOfAnyExcept(T value0, T value1)
+        {
+            return LastIndexOfAnyExceptCore(span, value0, value1);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <param name="value2">The third value to exclude.</param>
+        /// <returns>The index of the last value other than the specified values, or -1 if all values are excluded.</returns>
+        public nint LastIndexOfAnyExcept(T value0, T value1, T value2)
+        {
+            return LastIndexOfAnyExceptCore(span, value0, value1, value2);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value other than the specified value.
+        /// </summary>
+        /// <param name="value">The value to exclude.</param>
+        /// <returns><see langword="true"/> if any value differs from <paramref name="value"/>; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(T value)
+        {
+            return IndexOfAnyExceptCore(span, value) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value other than the specified values.
+        /// </summary>
+        /// <param name="values">The values to exclude.</param>
+        /// <returns><see langword="true"/> if any value is not in <paramref name="values"/>; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(BigReadOnlySpan<T> values)
+        {
+            return IndexOfAnyExceptCore(span, values) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <returns><see langword="true"/> if any value differs from the specified values; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(T value0, T value1)
+        {
+            return IndexOfAnyExceptCore(span, value0, value1) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value other than the specified values.
+        /// </summary>
+        /// <param name="value0">The first value to exclude.</param>
+        /// <param name="value1">The second value to exclude.</param>
+        /// <param name="value2">The third value to exclude.</param>
+        /// <returns><see langword="true"/> if any value differs from the specified values; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExcept(T value0, T value1, T value2)
+        {
+            return IndexOfAnyExceptCore(span, value0, value1, value2) >= 0;
         }
 
         /// <summary>
@@ -709,6 +2347,318 @@ public static class BigArrayExtensions
         public bool EndsWith(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
         {
             return EndsWithCore(span, value, comparer);
+        }
+    }
+
+    extension<T>(BigSpan<T> span) where T : IEquatable<T>
+    {
+        /// <summary>
+        /// Splits the current span using any of the specified precomputed separators.
+        /// </summary>
+        /// <param name="separators">The precomputed separators to split on.</param>
+        /// <returns>An enumerator over the split segments.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="separators"/> is <see langword="null"/>.</exception>
+        public BigSpanSearchValuesSplitEnumerator<T> SplitAny(SearchValues<T> separators)
+        {
+            ArgumentNullException.ThrowIfNull(separators);
+            return new BigSpanSearchValuesSplitEnumerator<T>(AsReadOnlySpan(span), separators);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to locate.</param>
+        /// <returns>The index of the first occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint IndexOfAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to locate.</param>
+        /// <returns>The index of the last occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint LastIndexOfAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return LastIndexOfAnyCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to locate.</param>
+        /// <returns><see langword="true"/> if any value in <paramref name="values"/> is found; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public bool ContainsAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyCore(AsReadOnlySpan(span), values) >= 0;
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to exclude.</param>
+        /// <returns>The index of the first value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint IndexOfAnyExcept(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to exclude.</param>
+        /// <returns>The index of the last value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint LastIndexOfAnyExcept(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return LastIndexOfAnyExceptCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value other than the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to exclude.</param>
+        /// <returns><see langword="true"/> if any value is not in <paramref name="values"/>; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public bool ContainsAnyExcept(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyExceptCore(AsReadOnlySpan(span), values) >= 0;
+        }
+    }
+
+    extension<T>(BigReadOnlySpan<T> span) where T : IEquatable<T>
+    {
+        /// <summary>
+        /// Splits the current read-only span using any of the specified precomputed separators.
+        /// </summary>
+        /// <param name="separators">The precomputed separators to split on.</param>
+        /// <returns>An enumerator over the split segments.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="separators"/> is <see langword="null"/>.</exception>
+        public BigSpanSearchValuesSplitEnumerator<T> SplitAny(SearchValues<T> separators)
+        {
+            ArgumentNullException.ThrowIfNull(separators);
+            return new BigSpanSearchValuesSplitEnumerator<T>(span, separators);
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to locate.</param>
+        /// <returns>The index of the first occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint IndexOfAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyCore(span, values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to locate.</param>
+        /// <returns>The index of the last occurrence of any value in <paramref name="values"/>, or -1 if none are found.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint LastIndexOfAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return LastIndexOfAnyCore(span, values);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to locate.</param>
+        /// <returns><see langword="true"/> if any value in <paramref name="values"/> is found; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public bool ContainsAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyCore(span, values) >= 0;
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value other than the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to exclude.</param>
+        /// <returns>The index of the first value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint IndexOfAnyExcept(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyExceptCore(span, values);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value other than the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to exclude.</param>
+        /// <returns>The index of the last value not in <paramref name="values"/>, or -1 if all values are excluded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint LastIndexOfAnyExcept(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return LastIndexOfAnyExceptCore(span, values);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value other than the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to exclude.</param>
+        /// <returns><see langword="true"/> if any value is not in <paramref name="values"/>; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public bool ContainsAnyExcept(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return IndexOfAnyExceptCore(span, values) >= 0;
+        }
+    }
+
+    extension<T>(BigSpan<T> span) where T : IComparable<T>
+    {
+        /// <summary>
+        /// Searches for the first occurrence of any value in the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the range to locate.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the range to locate.</param>
+        /// <returns>The index of the first value in the specified range, or -1 if no value is found.</returns>
+        public nint IndexOfAnyInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyInRangeCore(AsReadOnlySpan(span), lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value in the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the range to locate.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the range to locate.</param>
+        /// <returns>The index of the last value in the specified range, or -1 if no value is found.</returns>
+        public nint LastIndexOfAnyInRange(T lowInclusive, T highInclusive)
+        {
+            return LastIndexOfAnyInRangeCore(AsReadOnlySpan(span), lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value in the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the range to locate.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the range to locate.</param>
+        /// <returns><see langword="true"/> if any value is in the specified range; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyInRangeCore(AsReadOnlySpan(span), lowInclusive, highInclusive) >= 0;
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value outside the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the excluded range.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the excluded range.</param>
+        /// <returns>The index of the first value outside the specified range, or -1 if all values are inside the range.</returns>
+        public nint IndexOfAnyExceptInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyExceptInRangeCore(AsReadOnlySpan(span), lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value outside the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the excluded range.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the excluded range.</param>
+        /// <returns>The index of the last value outside the specified range, or -1 if all values are inside the range.</returns>
+        public nint LastIndexOfAnyExceptInRange(T lowInclusive, T highInclusive)
+        {
+            return LastIndexOfAnyExceptInRangeCore(AsReadOnlySpan(span), lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Determines whether the span contains any value outside the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the excluded range.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the excluded range.</param>
+        /// <returns><see langword="true"/> if any value is outside the specified range; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExceptInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyExceptInRangeCore(AsReadOnlySpan(span), lowInclusive, highInclusive) >= 0;
+        }
+    }
+
+    extension<T>(BigReadOnlySpan<T> span) where T : IComparable<T>
+    {
+        /// <summary>
+        /// Searches for the first occurrence of any value in the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the range to locate.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the range to locate.</param>
+        /// <returns>The index of the first value in the specified range, or -1 if no value is found.</returns>
+        public nint IndexOfAnyInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyInRangeCore(span, lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value in the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the range to locate.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the range to locate.</param>
+        /// <returns>The index of the last value in the specified range, or -1 if no value is found.</returns>
+        public nint LastIndexOfAnyInRange(T lowInclusive, T highInclusive)
+        {
+            return LastIndexOfAnyInRangeCore(span, lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value in the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the range to locate.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the range to locate.</param>
+        /// <returns><see langword="true"/> if any value is in the specified range; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyInRangeCore(span, lowInclusive, highInclusive) >= 0;
+        }
+
+        /// <summary>
+        /// Searches for the first occurrence of any value outside the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the excluded range.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the excluded range.</param>
+        /// <returns>The index of the first value outside the specified range, or -1 if all values are inside the range.</returns>
+        public nint IndexOfAnyExceptInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyExceptInRangeCore(span, lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Searches for the last occurrence of any value outside the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the excluded range.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the excluded range.</param>
+        /// <returns>The index of the last value outside the specified range, or -1 if all values are inside the range.</returns>
+        public nint LastIndexOfAnyExceptInRange(T lowInclusive, T highInclusive)
+        {
+            return LastIndexOfAnyExceptInRangeCore(span, lowInclusive, highInclusive);
+        }
+
+        /// <summary>
+        /// Determines whether the read-only span contains any value outside the specified inclusive range.
+        /// </summary>
+        /// <param name="lowInclusive">The lower bound, inclusive, of the excluded range.</param>
+        /// <param name="highInclusive">The upper bound, inclusive, of the excluded range.</param>
+        /// <returns><see langword="true"/> if any value is outside the specified range; otherwise, <see langword="false"/>.</returns>
+        public bool ContainsAnyExceptInRange(T lowInclusive, T highInclusive)
+        {
+            return IndexOfAnyExceptInRangeCore(span, lowInclusive, highInclusive) >= 0;
         }
     }
 }
