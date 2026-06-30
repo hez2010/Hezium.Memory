@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -70,9 +70,7 @@ public readonly ref struct BigSpan<T>
     public BigSpan(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+        if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _first = ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage)), start);
         _length = length;
@@ -99,9 +97,7 @@ public readonly ref struct BigSpan<T>
     public BigSpan(T[] array, int start, int length)
     {
         ArgumentNullException.ThrowIfNull(array);
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+        if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _first = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), start);
         _length = length;
@@ -117,7 +113,7 @@ public readonly ref struct BigSpan<T>
     public unsafe BigSpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
-        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length), "Length must be non-negative.");
+        if (length < 0) ThrowHelpers.ThrowOutOfRange(nameof(length), "Length must be non-negative.");
         _first = ref Unsafe.AsRef<T>(pointer);
         _length = length;
     }
@@ -141,8 +137,7 @@ public readonly ref struct BigSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpan<T> Slice(nint start)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(start, _length);
+        if ((nuint)start > (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(start));
 
         return new BigSpan<T>(ref Unsafe.Add(ref _first, start), _length - start);
     }
@@ -156,9 +151,7 @@ public readonly ref struct BigSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpan<T> Slice(nint start, nint length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) ThrowHelpers.ThrowOutOfRange();
 
         return new BigSpan<T>(ref Unsafe.Add(ref _first, start), length);
     }
@@ -173,8 +166,7 @@ public readonly ref struct BigSpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(index);
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _length - 1);
+            if ((nuint)index >= (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(index));
 
             return ref Unsafe.Add(ref _first, index);
         }
@@ -335,9 +327,7 @@ public readonly ref struct BigReadOnlySpan<T>
     public BigReadOnlySpan(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+        if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _first = ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage)), start);
         _length = length;
@@ -366,9 +356,7 @@ public readonly ref struct BigReadOnlySpan<T>
     public BigReadOnlySpan(T[] array, int start, int length)
     {
         ArgumentNullException.ThrowIfNull(array);
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array.Length - start);
+        if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _first = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), start);
         _length = length;
@@ -384,7 +372,7 @@ public readonly ref struct BigReadOnlySpan<T>
     public unsafe BigReadOnlySpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        if (length < 0) ThrowHelpers.ThrowOutOfRange(nameof(length));
         _first = ref Unsafe.AsRef<T>(pointer);
         _length = length;
     }
@@ -421,8 +409,7 @@ public readonly ref struct BigReadOnlySpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigReadOnlySpan<T> Slice(nint start)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(start, _length);
+        if ((nuint)start > (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(start));
 
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in _first), start), _length - start);
     }
@@ -436,9 +423,7 @@ public readonly ref struct BigReadOnlySpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigReadOnlySpan<T> Slice(nint start, nint length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) ThrowHelpers.ThrowOutOfRange();
 
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in _first), start), length);
     }
@@ -453,8 +438,7 @@ public readonly ref struct BigReadOnlySpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(index);
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _length - 1);
+            if ((nuint)index >= (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(index));
 
             return ref Unsafe.Add(ref Unsafe.AsRef(in _first), index);
         }

@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -73,9 +73,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     public BigMemory(T[]? array, int start, int length)
     {
         nint arrayLength = array?.Length ?? 0;
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, arrayLength - start);
+        if ((nuint)start > (nuint)arrayLength || (nuint)length > (nuint)(arrayLength - start)) ThrowHelpers.ThrowOutOfRange();
 
         _storage = array;
         _start = start;
@@ -107,9 +105,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     public BigMemory(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array._length - start);
+        if ((nuint)start > (nuint)array._length || (nuint)length > (nuint)(array._length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _storage = array._storage;
         _start = start;
@@ -133,8 +129,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigMemory<T> Slice(nint start)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(start, _length);
+        if ((nuint)start > (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(start));
 
         return new BigMemory<T>(_storage, _start + start, _length - start);
     }
@@ -149,9 +144,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigMemory<T> Slice(nint start, nint length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) ThrowHelpers.ThrowOutOfRange();
 
         return new BigMemory<T>(_storage, _start + start, length);
     }
@@ -346,9 +339,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     public BigReadOnlyMemory(T[]? array, nint start, nint length)
     {
         nint arrayLength = array?.Length ?? 0;
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, arrayLength - start);
+        if ((nuint)start > (nuint)arrayLength || (nuint)length > (nuint)(arrayLength - start)) ThrowHelpers.ThrowOutOfRange();
 
         _storage = array;
         _start = start;
@@ -380,9 +371,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     public BigReadOnlyMemory(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, array._length - start);
+        if ((nuint)start > (nuint)array._length || (nuint)length > (nuint)(array._length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _storage = array._storage;
         _start = start;
@@ -406,8 +395,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlyMemory<T> Slice(nint start)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(start, _length);
+        if ((nuint)start > (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(start));
 
         return new BigReadOnlyMemory<T>(_storage, _start + start, _length - start);
     }
@@ -422,9 +410,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlyMemory<T> Slice(nint start, nint length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) ThrowHelpers.ThrowOutOfRange();
 
         return new BigReadOnlyMemory<T>(_storage, _start + start, length);
     }

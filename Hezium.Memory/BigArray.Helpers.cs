@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Hezium.Memory;
@@ -522,7 +523,7 @@ public sealed partial class BigArray<T>
             21845 => static (chunks, pinned, uninitialized) => AllocateArray<ElementChunk5<ElementChunk17<ElementChunk257<T>>>>(chunks, pinned, uninitialized),
             32767 => static (chunks, pinned, uninitialized) => AllocateArray<ElementChunk7<ElementChunk31<ElementChunk151<T>>>>(chunks, pinned, uninitialized),
             65535 => static (chunks, pinned, uninitialized) => AllocateArray<ElementChunk3<ElementChunk5<ElementChunk17<ElementChunk257<T>>>>>(chunks, pinned, uninitialized),
-            _ => throw new ArgumentOutOfRangeException(nameof(chunkLength))
+            _ => throw new UnreachableException(),
         };
     }
 

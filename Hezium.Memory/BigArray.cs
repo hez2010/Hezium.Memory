@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -30,8 +30,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigArray(nint length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaxLength);
+        if ((nuint)length > (nuint)MaxLength) ThrowHelpers.ThrowOutOfRange(nameof(length));
 
         if (length <= Array.MaxLength) _storage = new ElementChunk1<T>[length];
         else _storage = CreateBigArraySlow(length);
@@ -46,8 +45,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
 
     internal static BigArray<T> Allocate(nint length, bool pinned, bool uninitialized)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaxLength);
+        if ((nuint)length > (nuint)MaxLength) ThrowHelpers.ThrowOutOfRange(nameof(length));
 
         Array storage = length <= Array.MaxLength
             ? uninitialized
@@ -84,8 +82,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(index);
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _length - 1);
+            if ((nuint)index >= (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(index));
 
             return ref Unsafe.Add(ref GetDataReference(), index);
         }
@@ -209,9 +206,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<T> AsSpan(nint start, int length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(start);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, _length - start);
+        if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) ThrowHelpers.ThrowOutOfRange();
 
         return MemoryMarshal.CreateSpan(ref Unsafe.Add(ref GetDataReference(), start), length);
     }
