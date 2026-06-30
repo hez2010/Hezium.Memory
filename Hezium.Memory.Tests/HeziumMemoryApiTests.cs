@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -587,7 +588,8 @@ public sealed class HeziumMemoryApiTests
                 var allocate = BigArray<byte>.CreateBigArrayAllocator(chunkLength);
                 Array storage = allocate(1, false, false);
 
-                Assert.True(storage.Length == 1);
+                Assert.Single(storage);
+                Assert.Equal(chunkLength, GetStorageChunkLength<byte>(storage));
             }
         }
 
@@ -595,8 +597,10 @@ public sealed class HeziumMemoryApiTests
 
         int referenceChunkLength = 65535 / Unsafe.SizeOf<object>();
         var referenceAllocate = BigArray<object>.CreateBigArrayAllocator(referenceChunkLength);
+        Array referenceStorage = referenceAllocate(0, false, false);
 
-        Assert.Empty(referenceAllocate(0, false, false));
+        Assert.Empty(referenceStorage);
+        Assert.Equal(referenceChunkLength, GetStorageChunkLength<object>(referenceStorage));
     }
 
     [Fact]
@@ -611,6 +615,28 @@ public sealed class HeziumMemoryApiTests
     private struct MaxSizedElement
     {
         private byte _first;
+    }
+
+    private static int GetStorageChunkLength<TElement>(Array storage)
+    {
+        Type? chunkType = storage.GetType().GetElementType();
+        Assert.NotNull(chunkType);
+
+        int chunkLength = 1;
+        while (chunkType != typeof(TElement))
+        {
+            Assert.True(chunkType.IsGenericType);
+
+            InlineArrayAttribute? inlineArray = chunkType.GetCustomAttribute<InlineArrayAttribute>();
+            Assert.NotNull(inlineArray);
+            chunkLength = checked(chunkLength * inlineArray.Length);
+
+            Type[] typeArguments = chunkType.GetGenericArguments();
+            Assert.Single(typeArguments);
+            chunkType = typeArguments[0];
+        }
+
+        return chunkLength;
     }
 
     private static T[] ToArray<T>(BigSpan<T> span)
