@@ -121,6 +121,15 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     }
 
     /// <summary>
+    /// Returns a string that represents the current <see cref="BigMemory{T}"/>.
+    /// </summary>
+    /// <returns>A string that represents the current <see cref="BigMemory{T}"/>.</returns>
+    public override string ToString()
+    {
+        return $"{nameof(BigMemory<>)}<{typeof(T)}>[{_length}]";
+    }
+
+    /// <summary>
     /// Creates a new <see cref="BigMemory{T}"/> that represents a slice of the current memory starting at the specified index.
     /// </summary>
     /// <param name="start">The index at which to start the slice.</param>

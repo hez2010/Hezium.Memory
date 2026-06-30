@@ -57,6 +57,15 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     }
 
     /// <summary>
+    /// Returns a string that represents the current <see cref="BigArray{T}"/>.
+    /// </summary>
+    /// <returns>A string that represents the current <see cref="BigArray{T}"/>.</returns>
+    public override string ToString()
+    {
+        return $"{nameof(BigArray<>)}<{typeof(T)}>[{_length}]";
+    }
+
+    /// <summary>
     /// Gets an empty <see cref="BigArray{T}"/>.
     /// </summary>
     public static BigArray<T> Empty { get; } = new(0);

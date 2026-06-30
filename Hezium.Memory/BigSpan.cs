@@ -130,6 +130,15 @@ public readonly ref struct BigSpan<T>
     }
 
     /// <summary>
+    /// Returns a string that represents the current <see cref="BigSpan{T}"/>.
+    /// </summary>
+    /// <returns>A string that represents the current <see cref="BigSpan{T}"/>.</returns>
+    public new string ToString()
+    {
+        return $"{nameof(BigSpan<>)}<{typeof(T)}>[{_length}]";
+    }
+
+    /// <summary>
     /// Creates a new <see cref="BigSpan{T}"/> that represents a slice of the current span starting at the specified index.
     /// </summary>
     /// <param name="start">The index at which to start the slice.</param>

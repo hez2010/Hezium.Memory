@@ -17,7 +17,7 @@
     <RepositoryUrl>https://github.com/hez2010/Hezium.Memory</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <PackageTags>array;bigarray;largearray;collections;bigcollections;largecollections;memory;readonlymemory;bigmemory;bigreadonlymemory;span;readonlyspan;bigspan;bigreadonlyspan;largespan;largereadonlyspan</PackageTags>
   </PropertyGroup>
 
