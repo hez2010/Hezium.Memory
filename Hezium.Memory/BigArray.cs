@@ -43,6 +43,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         _length = length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static BigArray<T> Allocate(nint length, bool pinned, bool uninitialized)
     {
         if ((nuint)length > (nuint)MaxLength) ThrowHelpers.ThrowOutOfRange(nameof(length));
