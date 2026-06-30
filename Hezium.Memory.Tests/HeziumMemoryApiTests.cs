@@ -88,6 +88,11 @@ public sealed class HeziumMemoryApiTests
         Assert.False(array.Contains(6));
         Assert.Equal(3, array.BinarySearch(4));
         Assert.Equal(3, array.BinarySearch(4, Comparer<int>.Default));
+
+        BigArray<int?> array2 = new(7);
+        array2.Fill(null);
+        array2[3] = 42;
+        Assert.Equal([null, null, null, 42, null, null, null], array2.ToArray());
     }
 
     [Fact]
