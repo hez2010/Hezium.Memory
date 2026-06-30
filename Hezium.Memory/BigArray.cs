@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace Hezium.Memory;
 
 /// <summary>
-/// Represents a one-dimensional, zero-based collection that can expose more than <see cref="Array.MaxLength"/> logical elements.
+/// Represents a one-dimensional, zero-based array.
 /// </summary>
 /// <typeparam name="T">The type of elements in the array.</typeparam>
 [CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigArray))]
@@ -104,7 +104,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     }
 
     /// <summary>
-    /// Gets the maximum supported logical length for a <see cref="BigArray{T}"/>.
+    /// Gets the maximum supported length for a <see cref="BigArray{T}"/>.
     /// </summary>
     public static nint MaxLength
     {

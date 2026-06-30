@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 namespace Hezium.Memory;
 
 /// <summary>
-/// Provides a type-safe view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
+/// Provides a type-safe view over a contiguous region of memory.
 /// </summary>
 /// <typeparam name="T">The type of elements in the span.</typeparam>
 [CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigSpan))]
@@ -262,7 +262,7 @@ public readonly ref struct BigSpan<T>
 }
 
 /// <summary>
-/// Provides a type-safe read-only view over a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
+/// Provides a type-safe read-only view over a contiguous region of memory.
 /// </summary>
 /// <typeparam name="T">The type of elements in the span.</typeparam>
 [CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigReadOnlySpan))]

@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace Hezium.Memory;
 
 /// <summary>
-/// Represents a contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
+/// Represents a contiguous region of memory.
 /// </summary>
 /// <typeparam name="T">The type of elements in the memory.</typeparam>
 public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
@@ -277,7 +277,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
 }
 
 /// <summary>
-/// Represents a read-only contiguous logical region of memory that can contain more than <see cref="Array.MaxLength"/> elements.
+/// Represents a read-only contiguous region of memory.
 /// </summary>
 /// <typeparam name="T">The type of elements in the memory.</typeparam>
 public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
