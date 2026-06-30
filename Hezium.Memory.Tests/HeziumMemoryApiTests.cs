@@ -574,7 +574,7 @@ public sealed class HeziumMemoryApiTests
     [Fact]
     public void BigArray_ChunkFactory_CoversEverySupportedElementSize()
     {
-        HashSet<int> factoryLengths = [];
+        HashSet<int> chunkLengths = [];
 
         for (int elementSize = 1; elementSize <= 65535; elementSize++)
         {
@@ -582,35 +582,29 @@ public sealed class HeziumMemoryApiTests
 
             Assert.True((long)chunkLength * elementSize <= 65535);
 
-            if (factoryLengths.Add(chunkLength))
+            if (chunkLengths.Add(chunkLength))
             {
-                var factory = BigArray<byte>.CreateBigArrayFactory(chunkLength);
-                Array storage = factory.Allocate(1, false, false);
+                var allocate = BigArray<byte>.CreateBigArrayAllocator(chunkLength);
+                Array storage = allocate(1, false, false);
 
                 Assert.True(storage.Length == 1);
-                Assert.Equal(chunkLength, factory.ElementLength);
-                Assert.Equal(chunkLength, factory.ElementByteLength);
             }
         }
 
-        Assert.Equal(510, factoryLengths.Count);
+        Assert.Equal(510, chunkLengths.Count);
 
         int referenceChunkLength = 65535 / Unsafe.SizeOf<object>();
-        var referenceFactory = BigArray<object>.CreateBigArrayFactory(referenceChunkLength);
+        var referenceAllocate = BigArray<object>.CreateBigArrayAllocator(referenceChunkLength);
 
-        Assert.Equal(referenceChunkLength, referenceFactory.ElementLength);
-        Assert.Equal(referenceChunkLength * Unsafe.SizeOf<object>(), referenceFactory.ElementByteLength);
-        Assert.Empty(referenceFactory.Allocate(0, false, false));
+        Assert.Empty(referenceAllocate(0, false, false));
     }
 
     [Fact]
     public void BigArray_ChunkFactory_LoadsArrayTypesOnUse()
     {
-        var factory = BigArray<MaxSizedElement>.CreateBigArrayFactory(1);
+        var allocate = BigArray<MaxSizedElement>.CreateBigArrayAllocator(1);
 
-        Assert.Equal(1, factory.ElementLength);
-        Assert.Equal(65535, factory.ElementByteLength);
-        Assert.Empty(factory.Allocate(0, false, false));
+        Assert.Empty(allocate(0, false, false));
     }
 
     [InlineArray(65535)]
