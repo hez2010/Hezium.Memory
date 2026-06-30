@@ -12,7 +12,6 @@
     <Authors>hez2010</Authors>
     <Description>A one-dimensional, zero-based BigArray, BigMemory, BigReadOnlyMemory, BigSpan and BigReadOnlySpan surface for arrays that exceed the standard .NET array limits.</Description>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/hez2010/Hezium.Memory</PackageProjectUrl>
     <RepositoryUrl>https://github.com/hez2010/Hezium.Memory</RepositoryUrl>
