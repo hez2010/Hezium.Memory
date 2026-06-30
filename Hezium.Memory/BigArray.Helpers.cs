@@ -7,571 +7,155 @@ public sealed partial class BigArray<T>
 {
     private const int MaxChunkByteLength = 65535;
 
+    internal readonly struct BigArrayFactory
+    {
+        private readonly Func<int, bool, bool, Array> _allocate;
+
+        internal BigArrayFactory(int elementLength, int elementByteLength, Func<int, bool, bool, Array> allocate)
+        {
+            ElementLength = elementLength;
+            ElementByteLength = elementByteLength;
+            _allocate = allocate;
+        }
+
+        internal int ElementLength { get; }
+
+        internal int ElementByteLength { get; }
+
+        internal Array Allocate(int chunks, bool pinned, bool uninitialized)
+        {
+            return _allocate(chunks, pinned, uninitialized);
+        }
+    }
+
     // Exhaustive for every value produced by 65535 / sizeof(T). Composite
-    // lengths are represented by nesting the prime-factor chunk structs.
-    // Keep the allocations behind lambdas so unselected chunk types stay lazy.
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory(int chunkLength) => chunkLength switch
+    // lengths are represented by recursively nesting the prime-factor chunk
+    // structs. Keep each nesting step behind a lambda so unselected chunk
+    // types stay lazy and cannot fail type loading before they are used.
+    internal static BigArrayFactory CreateBigArrayFactory(int chunkLength)
     {
-        <= 64 => CreateBigArrayFactory1To64(chunkLength),
-        <= 128 => CreateBigArrayFactory65To128(chunkLength),
-        <= 192 => CreateBigArrayFactory129To192(chunkLength),
-        <= 255 => CreateBigArrayFactory193To255(chunkLength),
-        <= 384 => CreateBigArrayFactory256To384(chunkLength),
-        <= 512 => CreateBigArrayFactory385To512(chunkLength),
-        <= 1023 => CreateBigArrayFactory513To1023(chunkLength),
-        <= 65535 => CreateBigArrayFactory1024To65535(chunkLength),
+        if ((uint)(chunkLength - 1) >= MaxChunkByteLength || MaxChunkByteLength / (MaxChunkByteLength / chunkLength) != chunkLength)
+        {
+            throw new UnreachableException();
+        }
+
+        return chunkLength == 1
+            ? CreateBigArrayFactoryCore<ElementChunk1<T>>(1)
+            : CreateBigArrayFactoryCore<T>(chunkLength);
+    }
+
+    private static BigArrayFactory CreateBigArrayFactoryCore<TElement>(int remainingElementCount)
+    {
+        if (remainingElementCount == 1)
+        {
+            int elementByteLength = Unsafe.SizeOf<TElement>();
+            return new BigArrayFactory(elementByteLength / Unsafe.SizeOf<T>(), elementByteLength, AllocateArray<TElement>);
+        }
+
+        int factor = GetPrimeFactor(remainingElementCount);
+        return GetBigArrayFactoryComposer<TElement>(factor)(remainingElementCount / factor);
+    }
+
+    private static Func<int, BigArrayFactory> GetBigArrayFactoryComposer<TElement>(int factor) => factor switch
+    {
+        2 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk2<TElement>>(remainingElementCount),
+        3 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk3<TElement>>(remainingElementCount),
+        5 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk5<TElement>>(remainingElementCount),
+        7 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk7<TElement>>(remainingElementCount),
+        11 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk11<TElement>>(remainingElementCount),
+        13 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk13<TElement>>(remainingElementCount),
+        17 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk17<TElement>>(remainingElementCount),
+        19 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk19<TElement>>(remainingElementCount),
+        23 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk23<TElement>>(remainingElementCount),
+        29 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk29<TElement>>(remainingElementCount),
+        31 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk31<TElement>>(remainingElementCount),
+        37 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk37<TElement>>(remainingElementCount),
+        41 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk41<TElement>>(remainingElementCount),
+        43 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk43<TElement>>(remainingElementCount),
+        47 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk47<TElement>>(remainingElementCount),
+        53 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk53<TElement>>(remainingElementCount),
+        59 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk59<TElement>>(remainingElementCount),
+        61 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk61<TElement>>(remainingElementCount),
+        67 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk67<TElement>>(remainingElementCount),
+        71 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk71<TElement>>(remainingElementCount),
+        73 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk73<TElement>>(remainingElementCount),
+        79 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk79<TElement>>(remainingElementCount),
+        83 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk83<TElement>>(remainingElementCount),
+        89 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk89<TElement>>(remainingElementCount),
+        97 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk97<TElement>>(remainingElementCount),
+        101 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk101<TElement>>(remainingElementCount),
+        103 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk103<TElement>>(remainingElementCount),
+        107 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk107<TElement>>(remainingElementCount),
+        109 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk109<TElement>>(remainingElementCount),
+        113 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk113<TElement>>(remainingElementCount),
+        127 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk127<TElement>>(remainingElementCount),
+        131 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk131<TElement>>(remainingElementCount),
+        137 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk137<TElement>>(remainingElementCount),
+        139 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk139<TElement>>(remainingElementCount),
+        149 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk149<TElement>>(remainingElementCount),
+        151 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk151<TElement>>(remainingElementCount),
+        157 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk157<TElement>>(remainingElementCount),
+        163 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk163<TElement>>(remainingElementCount),
+        167 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk167<TElement>>(remainingElementCount),
+        173 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk173<TElement>>(remainingElementCount),
+        179 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk179<TElement>>(remainingElementCount),
+        181 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk181<TElement>>(remainingElementCount),
+        191 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk191<TElement>>(remainingElementCount),
+        193 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk193<TElement>>(remainingElementCount),
+        197 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk197<TElement>>(remainingElementCount),
+        199 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk199<TElement>>(remainingElementCount),
+        211 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk211<TElement>>(remainingElementCount),
+        223 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk223<TElement>>(remainingElementCount),
+        227 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk227<TElement>>(remainingElementCount),
+        229 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk229<TElement>>(remainingElementCount),
+        233 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk233<TElement>>(remainingElementCount),
+        239 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk239<TElement>>(remainingElementCount),
+        241 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk241<TElement>>(remainingElementCount),
+        251 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk251<TElement>>(remainingElementCount),
+        257 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk257<TElement>>(remainingElementCount),
+        263 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk263<TElement>>(remainingElementCount),
+        269 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk269<TElement>>(remainingElementCount),
+        271 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk271<TElement>>(remainingElementCount),
+        277 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk277<TElement>>(remainingElementCount),
+        281 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk281<TElement>>(remainingElementCount),
+        283 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk283<TElement>>(remainingElementCount),
+        293 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk293<TElement>>(remainingElementCount),
+        307 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk307<TElement>>(remainingElementCount),
+        313 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk313<TElement>>(remainingElementCount),
+        337 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk337<TElement>>(remainingElementCount),
+        383 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk383<TElement>>(remainingElementCount),
+        397 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk397<TElement>>(remainingElementCount),
+        409 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk409<TElement>>(remainingElementCount),
+        431 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk431<TElement>>(remainingElementCount),
+        439 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk439<TElement>>(remainingElementCount),
+        461 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk461<TElement>>(remainingElementCount),
+        541 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk541<TElement>>(remainingElementCount),
+        569 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk569<TElement>>(remainingElementCount),
+        601 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk601<TElement>>(remainingElementCount),
+        661 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk661<TElement>>(remainingElementCount),
+        809 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk809<TElement>>(remainingElementCount),
+        829 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk829<TElement>>(remainingElementCount),
+        1129 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk1129<TElement>>(remainingElementCount),
+        1213 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk1213<TElement>>(remainingElementCount),
+        1489 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk1489<TElement>>(remainingElementCount),
+        2621 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk2621<TElement>>(remainingElementCount),
+        3449 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk3449<TElement>>(remainingElementCount),
+        6553 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk6553<TElement>>(remainingElementCount),
+        8191 => static remainingElementCount => CreateBigArrayFactoryCore<ElementChunk8191<TElement>>(remainingElementCount),
         _ => throw new UnreachableException()
     };
 
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory1To64(int chunkLength) => chunkLength switch
+    private static int GetPrimeFactor(int value)
     {
-        1 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk1<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk1<T>>(chunks, pinned),
-        2 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<T>>(chunks, pinned),
-        3 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<T>>(chunks, pinned),
-        4 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<T>>>(chunks, pinned),
-        5 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<T>>(chunks, pinned),
-        6 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<T>>>(chunks, pinned),
-        7 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<T>>(chunks, pinned),
-        8 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>(chunks, pinned),
-        9 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<T>>>(chunks, pinned),
-        10 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<T>>>(chunks, pinned),
-        11 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<T>>(chunks, pinned),
-        12 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>(chunks, pinned),
-        13 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<T>>(chunks, pinned),
-        14 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<T>>>(chunks, pinned),
-        15 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<T>>>(chunks, pinned),
-        16 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>(chunks, pinned),
-        17 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk17<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk17<T>>(chunks, pinned),
-        18 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>(chunks, pinned),
-        19 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk19<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk19<T>>(chunks, pinned),
-        20 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>(chunks, pinned),
-        21 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk7<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk7<T>>>(chunks, pinned),
-        22 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk11<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk11<T>>>(chunks, pinned),
-        23 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk23<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk23<T>>(chunks, pinned),
-        24 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>(chunks, pinned),
-        25 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk5<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk5<T>>>(chunks, pinned),
-        26 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk13<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk13<T>>>(chunks, pinned),
-        27 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>(chunks, pinned),
-        28 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>(chunks, pinned),
-        29 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk29<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk29<T>>(chunks, pinned),
-        30 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>(chunks, pinned),
-        31 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk31<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk31<T>>(chunks, pinned),
-        32 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>>(chunks, pinned),
-        33 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk11<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk11<T>>>(chunks, pinned),
-        34 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk17<T>>>(chunks, pinned),
-        35 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk7<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk7<T>>>(chunks, pinned),
-        36 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>(chunks, pinned),
-        37 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk37<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk37<T>>(chunks, pinned),
-        38 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk19<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk19<T>>>(chunks, pinned),
-        39 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk13<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk13<T>>>(chunks, pinned),
-        40 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>>(chunks, pinned),
-        41 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk41<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk41<T>>(chunks, pinned),
-        42 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>(chunks, pinned),
-        43 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk43<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk43<T>>(chunks, pinned),
-        44 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>(chunks, pinned),
-        45 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>(chunks, pinned),
-        46 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk23<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk23<T>>>(chunks, pinned),
-        47 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk47<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk47<T>>(chunks, pinned),
-        48 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>>(chunks, pinned),
-        49 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk7<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk7<T>>>(chunks, pinned),
-        50 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk5<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk5<T>>>>(chunks, pinned),
-        51 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk17<T>>>(chunks, pinned),
-        52 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk13<T>>>>(chunks, pinned),
-        53 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk53<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk53<T>>(chunks, pinned),
-        54 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>(chunks, pinned),
-        55 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk11<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk11<T>>>(chunks, pinned),
-        56 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>(chunks, pinned),
-        57 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk19<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk19<T>>>(chunks, pinned),
-        58 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk29<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk29<T>>>(chunks, pinned),
-        59 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk59<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk59<T>>(chunks, pinned),
-        60 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>>(chunks, pinned),
-        61 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk61<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk61<T>>(chunks, pinned),
-        62 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk31<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk31<T>>>(chunks, pinned),
-        63 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>(chunks, pinned),
-        64 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
+        return BigArrayChunkFactors.GetPrimeFactor(value);
+    }
 
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory65To128(int chunkLength) => chunkLength switch
+    private static Array AllocateArray<TElement>(int chunks, bool pinned, bool uninitialized)
     {
-        65 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk13<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk13<T>>>(chunks, pinned),
-        66 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>(chunks, pinned),
-        67 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk67<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk67<T>>(chunks, pinned),
-        68 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk17<T>>>>(chunks, pinned),
-        69 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk23<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk23<T>>>(chunks, pinned),
-        70 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>(chunks, pinned),
-        71 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk71<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk71<T>>(chunks, pinned),
-        72 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned),
-        73 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk73<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk73<T>>(chunks, pinned),
-        74 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk37<T>>>(chunks, pinned),
-        75 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>(chunks, pinned),
-        76 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk19<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk19<T>>>>(chunks, pinned),
-        77 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk11<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk11<T>>>(chunks, pinned),
-        78 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>(chunks, pinned),
-        79 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk79<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk79<T>>(chunks, pinned),
-        80 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>>>(chunks, pinned),
-        81 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>(chunks, pinned),
-        82 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk41<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk41<T>>>(chunks, pinned),
-        83 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk83<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk83<T>>(chunks, pinned),
-        84 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>>(chunks, pinned),
-        85 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk17<T>>>(chunks, pinned),
-        86 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk43<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk43<T>>>(chunks, pinned),
-        87 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk29<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk29<T>>>(chunks, pinned),
-        88 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>(chunks, pinned),
-        89 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk89<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk89<T>>(chunks, pinned),
-        90 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>(chunks, pinned),
-        91 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk13<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk13<T>>>(chunks, pinned),
-        92 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>(chunks, pinned),
-        93 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk31<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk31<T>>>(chunks, pinned),
-        94 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk47<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk47<T>>>(chunks, pinned),
-        95 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk19<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk19<T>>>(chunks, pinned),
-        96 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>>>(chunks, pinned),
-        97 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk97<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk97<T>>(chunks, pinned),
-        98 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned),
-        99 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk11<T>>>>(chunks, pinned),
-        100 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned),
-        101 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk101<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk101<T>>(chunks, pinned),
-        102 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk17<T>>>>(chunks, pinned),
-        103 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk103<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk103<T>>(chunks, pinned),
-        104 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk13<T>>>>>(chunks, pinned),
-        105 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>(chunks, pinned),
-        106 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk53<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk53<T>>>(chunks, pinned),
-        107 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk107<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk107<T>>(chunks, pinned),
-        108 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned),
-        109 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk109<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk109<T>>(chunks, pinned),
-        110 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk11<T>>>>(chunks, pinned),
-        111 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk37<T>>>(chunks, pinned),
-        112 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>>(chunks, pinned),
-        113 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk113<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk113<T>>(chunks, pinned),
-        114 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk19<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk19<T>>>>(chunks, pinned),
-        115 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk23<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk23<T>>>(chunks, pinned),
-        116 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk29<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk29<T>>>>(chunks, pinned),
-        117 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>(chunks, pinned),
-        118 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk59<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk59<T>>>(chunks, pinned),
-        119 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk17<T>>>(chunks, pinned),
-        120 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>>>(chunks, pinned),
-        121 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk11<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk11<T>>>(chunks, pinned),
-        122 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk61<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk61<T>>>(chunks, pinned),
-        123 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk41<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk41<T>>>(chunks, pinned),
-        124 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>(chunks, pinned),
-        125 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk5<ElementChunk5<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk5<ElementChunk5<T>>>>(chunks, pinned),
-        126 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>(chunks, pinned),
-        127 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk127<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk127<T>>(chunks, pinned),
-        128 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<T>>>>>>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
-
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory129To192(int chunkLength) => chunkLength switch
-    {
-        129 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk43<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk43<T>>>(chunks, pinned),
-        130 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>(chunks, pinned),
-        131 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk131<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk131<T>>(chunks, pinned),
-        132 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>>(chunks, pinned),
-        133 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk19<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk19<T>>>(chunks, pinned),
-        134 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk67<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk67<T>>>(chunks, pinned),
-        135 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>(chunks, pinned),
-        136 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk17<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk17<T>>>>>(chunks, pinned),
-        137 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk137<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk137<T>>(chunks, pinned),
-        138 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk23<T>>>>(chunks, pinned),
-        139 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk139<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk139<T>>(chunks, pinned),
-        140 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned),
-        141 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk47<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk47<T>>>(chunks, pinned),
-        142 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk71<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk71<T>>>(chunks, pinned),
-        143 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk13<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk13<T>>>(chunks, pinned),
-        144 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>>>(chunks, pinned),
-        145 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk29<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk29<T>>>(chunks, pinned),
-        146 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk73<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk73<T>>>(chunks, pinned),
-        147 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned),
-        148 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk37<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk37<T>>>>(chunks, pinned),
-        149 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk149<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk149<T>>(chunks, pinned),
-        150 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned),
-        151 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk151<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk151<T>>(chunks, pinned),
-        152 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk19<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk19<T>>>>>(chunks, pinned),
-        153 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk17<T>>>>(chunks, pinned),
-        154 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk11<T>>>>(chunks, pinned),
-        155 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk31<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk31<T>>>(chunks, pinned),
-        156 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>>(chunks, pinned),
-        157 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk157<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk157<T>>(chunks, pinned),
-        158 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk79<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk79<T>>>(chunks, pinned),
-        159 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk53<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk53<T>>>(chunks, pinned),
-        160 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<T>>>>>>>(chunks, pinned),
-        161 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk23<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk23<T>>>(chunks, pinned),
-        162 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned),
-        163 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk163<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk163<T>>(chunks, pinned),
-        164 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk41<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk41<T>>>>(chunks, pinned),
-        165 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk11<T>>>>(chunks, pinned),
-        166 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk83<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk83<T>>>(chunks, pinned),
-        167 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk167<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk167<T>>(chunks, pinned),
-        168 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>>>(chunks, pinned),
-        169 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk13<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk13<T>>>(chunks, pinned),
-        170 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk17<T>>>>(chunks, pinned),
-        171 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk19<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk19<T>>>>(chunks, pinned),
-        172 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk43<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk43<T>>>>(chunks, pinned),
-        173 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk173<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk173<T>>(chunks, pinned),
-        174 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk29<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk29<T>>>>(chunks, pinned),
-        175 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk5<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk5<ElementChunk7<T>>>>(chunks, pinned),
-        176 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>>(chunks, pinned),
-        177 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk59<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk59<T>>>(chunks, pinned),
-        178 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk89<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk89<T>>>(chunks, pinned),
-        179 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk179<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk179<T>>(chunks, pinned),
-        180 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>(chunks, pinned),
-        181 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk181<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk181<T>>(chunks, pinned),
-        182 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>(chunks, pinned),
-        183 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk61<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk61<T>>>(chunks, pinned),
-        184 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>>(chunks, pinned),
-        185 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk37<T>>>(chunks, pinned),
-        186 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk31<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk31<T>>>>(chunks, pinned),
-        187 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk17<T>>>(chunks, pinned),
-        188 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk47<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk47<T>>>>(chunks, pinned),
-        189 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>(chunks, pinned),
-        190 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk19<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk19<T>>>>(chunks, pinned),
-        191 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk191<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk191<T>>(chunks, pinned),
-        192 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<T>>>>>>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
-
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory193To255(int chunkLength) => chunkLength switch
-    {
-        193 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk193<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk193<T>>(chunks, pinned),
-        194 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk97<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk97<T>>>(chunks, pinned),
-        195 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>(chunks, pinned),
-        196 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk7<T>>>>>(chunks, pinned),
-        197 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk197<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk197<T>>(chunks, pinned),
-        198 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk11<T>>>>>(chunks, pinned),
-        199 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk199<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk199<T>>(chunks, pinned),
-        200 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned),
-        201 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk67<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk67<T>>>(chunks, pinned),
-        202 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk101<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk101<T>>>(chunks, pinned),
-        203 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk29<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk29<T>>>(chunks, pinned),
-        204 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk17<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk17<T>>>>>(chunks, pinned),
-        205 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk41<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk41<T>>>(chunks, pinned),
-        206 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk103<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk103<T>>>(chunks, pinned),
-        207 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk23<T>>>>(chunks, pinned),
-        208 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk13<T>>>>>>(chunks, pinned),
-        209 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk19<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk19<T>>>(chunks, pinned),
-        210 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned),
-        211 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk211<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk211<T>>(chunks, pinned),
-        212 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk53<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk53<T>>>>(chunks, pinned),
-        213 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk71<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk71<T>>>(chunks, pinned),
-        214 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk107<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk107<T>>>(chunks, pinned),
-        215 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk43<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk43<T>>>(chunks, pinned),
-        216 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>>(chunks, pinned),
-        217 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk31<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk31<T>>>(chunks, pinned),
-        218 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk109<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk109<T>>>(chunks, pinned),
-        219 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk73<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk73<T>>>(chunks, pinned),
-        220 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk11<T>>>>>(chunks, pinned),
-        221 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk17<T>>>(chunks, pinned),
-        222 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk37<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk37<T>>>>(chunks, pinned),
-        223 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk223<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk223<T>>(chunks, pinned),
-        224 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>>>(chunks, pinned),
-        225 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned),
-        226 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk113<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk113<T>>>(chunks, pinned),
-        227 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk227<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk227<T>>(chunks, pinned),
-        228 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk19<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk19<T>>>>>(chunks, pinned),
-        229 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk229<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk229<T>>(chunks, pinned),
-        230 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk23<T>>>>(chunks, pinned),
-        231 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk7<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk7<ElementChunk11<T>>>>(chunks, pinned),
-        232 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk29<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk29<T>>>>>(chunks, pinned),
-        233 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk233<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk233<T>>(chunks, pinned),
-        234 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>(chunks, pinned),
-        235 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk47<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk47<T>>>(chunks, pinned),
-        236 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk59<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk59<T>>>>(chunks, pinned),
-        237 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk79<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk79<T>>>(chunks, pinned),
-        238 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk17<T>>>>(chunks, pinned),
-        239 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk239<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk239<T>>(chunks, pinned),
-        240 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<T>>>>>>>(chunks, pinned),
-        241 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk241<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk241<T>>(chunks, pinned),
-        242 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk11<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk11<ElementChunk11<T>>>>(chunks, pinned),
-        243 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>(chunks, pinned),
-        244 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk61<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk61<T>>>>(chunks, pinned),
-        245 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned),
-        246 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk41<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk41<T>>>>(chunks, pinned),
-        247 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk19<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk19<T>>>(chunks, pinned),
-        248 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>>(chunks, pinned),
-        249 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk83<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk83<T>>>(chunks, pinned),
-        250 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk5<T>>>>>(chunks, pinned),
-        251 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk251<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk251<T>>(chunks, pinned),
-        252 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>(chunks, pinned),
-        253 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk23<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk23<T>>>(chunks, pinned),
-        254 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk127<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk127<T>>>(chunks, pinned),
-        255 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk17<T>>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
-
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory256To384(int chunkLength) => chunkLength switch
-    {
-        257 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk257<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk257<T>>(chunks, pinned),
-        258 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk43<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk43<T>>>>(chunks, pinned),
-        259 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk37<T>>>(chunks, pinned),
-        260 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>>(chunks, pinned),
-        261 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk29<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk29<T>>>>(chunks, pinned),
-        262 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk131<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk131<T>>>(chunks, pinned),
-        263 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk263<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk263<T>>(chunks, pinned),
-        264 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>>>(chunks, pinned),
-        265 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk53<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk53<T>>>(chunks, pinned),
-        266 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk19<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk19<T>>>>(chunks, pinned),
-        267 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk89<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk89<T>>>(chunks, pinned),
-        268 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk67<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk67<T>>>>(chunks, pinned),
-        269 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk269<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk269<T>>(chunks, pinned),
-        270 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>(chunks, pinned),
-        271 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk271<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk271<T>>(chunks, pinned),
-        273 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>(chunks, pinned),
-        274 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk137<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk137<T>>>(chunks, pinned),
-        275 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk5<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk5<ElementChunk11<T>>>>(chunks, pinned),
-        276 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk23<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk23<T>>>>>(chunks, pinned),
-        277 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk277<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk277<T>>(chunks, pinned),
-        278 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk139<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk139<T>>>(chunks, pinned),
-        280 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>>>(chunks, pinned),
-        281 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk281<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk281<T>>(chunks, pinned),
-        282 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk47<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk47<T>>>>(chunks, pinned),
-        283 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk283<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk283<T>>(chunks, pinned),
-        284 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk71<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk71<T>>>>(chunks, pinned),
-        286 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk11<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk11<ElementChunk13<T>>>>(chunks, pinned),
-        287 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk41<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk41<T>>>(chunks, pinned),
-        288 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<T>>>>>>>>(chunks, pinned),
-        289 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk17<ElementChunk17<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk17<ElementChunk17<T>>>(chunks, pinned),
-        291 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk97<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk97<T>>>(chunks, pinned),
-        292 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk73<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk73<T>>>>(chunks, pinned),
-        293 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk293<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk293<T>>(chunks, pinned),
-        295 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk59<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk59<T>>>(chunks, pinned),
-        296 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk37<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk37<T>>>>>(chunks, pinned),
-        297 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk11<T>>>>>(chunks, pinned),
-        299 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk23<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk23<T>>>(chunks, pinned),
-        300 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned),
-        302 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk151<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk151<T>>>(chunks, pinned),
-        303 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk101<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk101<T>>>(chunks, pinned),
-        304 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk19<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk19<T>>>>>>(chunks, pinned),
-        306 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk17<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk17<T>>>>>(chunks, pinned),
-        307 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk307<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk307<T>>(chunks, pinned),
-        309 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk103<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk103<T>>>(chunks, pinned),
-        310 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk31<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk31<T>>>>(chunks, pinned),
-        312 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>>>(chunks, pinned),
-        313 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk313<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk313<T>>(chunks, pinned),
-        315 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned),
-        316 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk79<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk79<T>>>>(chunks, pinned),
-        318 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk53<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk53<T>>>>(chunks, pinned),
-        319 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk29<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk29<T>>>(chunks, pinned),
-        321 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk107<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk107<T>>>(chunks, pinned),
-        322 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk23<T>>>>(chunks, pinned),
-        324 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>>(chunks, pinned),
-        326 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk163<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk163<T>>>(chunks, pinned),
-        327 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk109<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk109<T>>>(chunks, pinned),
-        329 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk47<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk47<T>>>(chunks, pinned),
-        330 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk11<T>>>>>(chunks, pinned),
-        332 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk83<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk83<T>>>>(chunks, pinned),
-        334 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk167<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk167<T>>>(chunks, pinned),
-        336 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<T>>>>>>>(chunks, pinned),
-        337 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk337<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk337<T>>(chunks, pinned),
-        339 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk113<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk113<T>>>(chunks, pinned),
-        341 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk31<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk31<T>>>(chunks, pinned),
-        343 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk7<ElementChunk7<T>>>>(chunks, pinned),
-        344 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk43<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk43<T>>>>>(chunks, pinned),
-        346 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk173<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk173<T>>>(chunks, pinned),
-        348 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk29<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk29<T>>>>>(chunks, pinned),
-        350 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk7<T>>>>>(chunks, pinned),
-        352 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>>>(chunks, pinned),
-        354 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk59<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk59<T>>>>(chunks, pinned),
-        356 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk89<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk89<T>>>>(chunks, pinned),
-        358 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk179<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk179<T>>>(chunks, pinned),
-        360 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>>(chunks, pinned),
-        362 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk181<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk181<T>>>(chunks, pinned),
-        364 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned),
-        366 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk61<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk61<T>>>>(chunks, pinned),
-        368 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>>>(chunks, pinned),
-        370 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk37<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk37<T>>>>(chunks, pinned),
-        372 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk31<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk31<T>>>>>(chunks, pinned),
-        374 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk11<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk11<ElementChunk17<T>>>>(chunks, pinned),
-        376 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk47<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk47<T>>>>>(chunks, pinned),
-        378 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>(chunks, pinned),
-        381 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk127<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk127<T>>>(chunks, pinned),
-        383 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk383<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk383<T>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
-
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory385To512(int chunkLength) => chunkLength switch
-    {
-        385 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk7<ElementChunk11<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk7<ElementChunk11<T>>>>(chunks, pinned),
-        387 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk43<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk43<T>>>>(chunks, pinned),
-        390 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>(chunks, pinned),
-        392 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk7<T>>>>>>(chunks, pinned),
-        394 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk197<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk197<T>>>(chunks, pinned),
-        397 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk397<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk397<T>>(chunks, pinned),
-        399 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk7<ElementChunk19<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk7<ElementChunk19<T>>>>(chunks, pinned),
-        402 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk67<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk67<T>>>>(chunks, pinned),
-        404 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk101<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk101<T>>>>(chunks, pinned),
-        407 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk37<T>>>(chunks, pinned),
-        409 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk409<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk409<T>>(chunks, pinned),
-        412 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk103<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk103<T>>>>(chunks, pinned),
-        414 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk23<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk23<T>>>>>(chunks, pinned),
-        417 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk139<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk139<T>>>(chunks, pinned),
-        420 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>(chunks, pinned),
-        422 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk211<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk211<T>>>(chunks, pinned),
-        425 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk5<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk5<ElementChunk17<T>>>>(chunks, pinned),
-        428 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk107<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk107<T>>>>(chunks, pinned),
-        431 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk431<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk431<T>>(chunks, pinned),
-        434 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk31<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk31<T>>>>(chunks, pinned),
-        436 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk109<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk109<T>>>>(chunks, pinned),
-        439 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk439<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk439<T>>(chunks, pinned),
-        442 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk13<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk13<ElementChunk17<T>>>>(chunks, pinned),
-        445 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk89<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk89<T>>>(chunks, pinned),
-        448 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<T>>>>>>>>(chunks, pinned),
-        451 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk11<ElementChunk41<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk11<ElementChunk41<T>>>(chunks, pinned),
-        455 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>(chunks, pinned),
-        458 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk229<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk229<T>>>(chunks, pinned),
-        461 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk461<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk461<T>>(chunks, pinned),
-        464 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk29<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk29<T>>>>>>(chunks, pinned),
-        468 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>>(chunks, pinned),
-        471 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk157<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk157<T>>>(chunks, pinned),
-        474 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk79<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk79<T>>>>(chunks, pinned),
-        478 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk239<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk239<T>>>(chunks, pinned),
-        481 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk37<T>>>(chunks, pinned),
-        485 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk97<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk97<T>>>(chunks, pinned),
-        489 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk163<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk163<T>>>(chunks, pinned),
-        492 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk41<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk41<T>>>>>(chunks, pinned),
-        496 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>>>(chunks, pinned),
-        500 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned),
-        504 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>>(chunks, pinned),
-        508 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk127<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk127<T>>>>(chunks, pinned),
-        511 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk73<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk73<T>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
-
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory513To1023(int chunkLength) => chunkLength switch
-    {
-        516 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk43<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk43<T>>>>>(chunks, pinned),
-        520 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>>>(chunks, pinned),
-        524 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk131<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk131<T>>>>(chunks, pinned),
-        528 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk11<T>>>>>>>(chunks, pinned),
-        532 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk19<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk19<T>>>>>(chunks, pinned),
-        537 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk179<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk179<T>>>(chunks, pinned),
-        541 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk541<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk541<T>>(chunks, pinned),
-        546 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned),
-        550 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk11<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk5<ElementChunk11<T>>>>>(chunks, pinned),
-        555 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk37<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk37<T>>>>(chunks, pinned),
-        560 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<T>>>>>>>(chunks, pinned),
-        564 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk47<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk47<T>>>>>(chunks, pinned),
-        569 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk569<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk569<T>>(chunks, pinned),
-        574 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk41<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk41<T>>>>(chunks, pinned),
-        579 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk193<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk193<T>>>(chunks, pinned),
-        585 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>(chunks, pinned),
-        590 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk59<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk59<T>>>>(chunks, pinned),
-        595 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk7<ElementChunk17<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk7<ElementChunk17<T>>>>(chunks, pinned),
-        601 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk601<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk601<T>>(chunks, pinned),
-        606 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk101<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk101<T>>>>(chunks, pinned),
-        612 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk17<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk17<T>>>>>>(chunks, pinned),
-        618 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk103<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk103<T>>>>(chunks, pinned),
-        624 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk13<T>>>>>>>(chunks, pinned),
-        630 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>(chunks, pinned),
-        636 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk53<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk53<T>>>>>(chunks, pinned),
-        642 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk107<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk107<T>>>>(chunks, pinned),
-        648 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk3<T>>>>>>>>(chunks, pinned),
-        655 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk131<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk131<T>>>(chunks, pinned),
-        661 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk661<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk661<T>>(chunks, pinned),
-        668 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk167<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk167<T>>>>(chunks, pinned),
-        675 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk5<T>>>>>>(chunks, pinned),
-        682 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk11<ElementChunk31<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk11<ElementChunk31<T>>>>(chunks, pinned),
-        689 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk53<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk53<T>>>(chunks, pinned),
-        697 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk17<ElementChunk41<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk17<ElementChunk41<T>>>(chunks, pinned),
-        704 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk11<T>>>>>>>>(chunks, pinned),
-        712 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk89<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk89<T>>>>>(chunks, pinned),
-        720 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<T>>>>>>>>(chunks, pinned),
-        728 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned),
-        736 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk23<T>>>>>>>(chunks, pinned),
-        744 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk31<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk31<T>>>>>>(chunks, pinned),
-        753 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk251<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk251<T>>>(chunks, pinned),
-        762 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk127<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk127<T>>>>(chunks, pinned),
-        771 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk257<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk257<T>>>(chunks, pinned),
-        780 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>(chunks, pinned),
-        789 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk263<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk263<T>>>(chunks, pinned),
-        799 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk17<ElementChunk47<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk17<ElementChunk47<T>>>(chunks, pinned),
-        809 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk809<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk809<T>>(chunks, pinned),
-        819 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned),
-        829 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk829<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk829<T>>(chunks, pinned),
-        840 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>(chunks, pinned),
-        851 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk23<ElementChunk37<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk23<ElementChunk37<T>>>(chunks, pinned),
-        862 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk431<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk431<T>>>(chunks, pinned),
-        873 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk97<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk97<T>>>>(chunks, pinned),
-        885 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk59<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk59<T>>>>(chunks, pinned),
-        897 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk13<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk13<ElementChunk23<T>>>>(chunks, pinned),
-        910 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned),
-        923 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk71<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk71<T>>>(chunks, pinned),
-        936 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>>>(chunks, pinned),
-        949 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk13<ElementChunk73<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk13<ElementChunk73<T>>>(chunks, pinned),
-        963 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk107<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk107<T>>>>(chunks, pinned),
-        978 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk163<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk163<T>>>>(chunks, pinned),
-        992 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk31<T>>>>>>>(chunks, pinned),
-        1008 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<T>>>>>>>>(chunks, pinned),
-        1023 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk11<ElementChunk31<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk11<ElementChunk31<T>>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
-
-    private static Func<int, bool, bool, Array> CreateBigArrayFactory1024To65535(int chunkLength) => chunkLength switch
-    {
-        1040 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk13<T>>>>>>>(chunks, pinned),
-        1057 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk151<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk151<T>>>(chunks, pinned),
-        1074 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk179<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk179<T>>>>(chunks, pinned),
-        1092 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned),
-        1110 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk37<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk37<T>>>>>(chunks, pinned),
-        1129 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk1129<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk1129<T>>(chunks, pinned),
-        1149 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk383<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk383<T>>>(chunks, pinned),
-        1170 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>(chunks, pinned),
-        1191 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk397<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk397<T>>>(chunks, pinned),
-        1213 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk1213<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk1213<T>>(chunks, pinned),
-        1236 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk103<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk103<T>>>>>(chunks, pinned),
-        1260 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>(chunks, pinned),
-        1285 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk257<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk257<T>>>(chunks, pinned),
-        1310 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk5<ElementChunk131<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk5<ElementChunk131<T>>>>(chunks, pinned),
-        1337 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk191<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk191<T>>>(chunks, pinned),
-        1365 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>(chunks, pinned),
-        1394 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk17<ElementChunk41<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk17<ElementChunk41<T>>>>(chunks, pinned),
-        1424 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk89<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk89<T>>>>>>(chunks, pinned),
-        1456 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned),
-        1489 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk1489<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk1489<T>>(chunks, pinned),
-        1524 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk127<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk127<T>>>>>(chunks, pinned),
-        1560 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>>(chunks, pinned),
-        1598 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk17<ElementChunk47<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk17<ElementChunk47<T>>>>(chunks, pinned),
-        1638 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned),
-        1680 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>>(chunks, pinned),
-        1724 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk431<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk431<T>>>>(chunks, pinned),
-        1771 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk11<ElementChunk23<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk11<ElementChunk23<T>>>>(chunks, pinned),
-        1820 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned),
-        1872 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk13<T>>>>>>>>(chunks, pinned),
-        1927 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk41<ElementChunk47<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk41<ElementChunk47<T>>>(chunks, pinned),
-        1985 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk397<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk397<T>>>(chunks, pinned),
-        2047 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk23<ElementChunk89<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk23<ElementChunk89<T>>>(chunks, pinned),
-        2114 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk7<ElementChunk151<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk7<ElementChunk151<T>>>>(chunks, pinned),
-        2184 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned),
-        2259 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk251<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk251<T>>>>(chunks, pinned),
-        2340 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>>(chunks, pinned),
-        2427 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk809<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk809<T>>>(chunks, pinned),
-        2520 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<T>>>>>>>>(chunks, pinned),
-        2621 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2621<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk2621<T>>(chunks, pinned),
-        2730 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned),
-        2849 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk11<ElementChunk37<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk11<ElementChunk37<T>>>>(chunks, pinned),
-        2978 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk1489<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk1489<T>>>(chunks, pinned),
-        3120 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk5<ElementChunk13<T>>>>>>>>(chunks, pinned),
-        3276 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk3<ElementChunk3<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned),
-        3449 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3449<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk3449<T>>(chunks, pinned),
-        3640 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk2<ElementChunk2<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>>(chunks, pinned),
-        3855 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk257<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk257<T>>>>(chunks, pinned),
-        4095 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk5<ElementChunk7<ElementChunk13<T>>>>>>(chunks, pinned),
-        4369 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk17<ElementChunk257<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk17<ElementChunk257<T>>>(chunks, pinned),
-        4681 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk31<ElementChunk151<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk31<ElementChunk151<T>>>(chunks, pinned),
-        5041 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk71<ElementChunk71<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk71<ElementChunk71<T>>>(chunks, pinned),
-        5461 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk43<ElementChunk127<T>>>(chunks, pinned) : GC.AllocateArray<ElementChunk43<ElementChunk127<T>>>(chunks, pinned),
-        5957 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk23<ElementChunk37<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk23<ElementChunk37<T>>>>(chunks, pinned),
-        6553 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk6553<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk6553<T>>(chunks, pinned),
-        7281 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk3<ElementChunk809<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk3<ElementChunk809<T>>>>(chunks, pinned),
-        8191 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk8191<T>>(chunks, pinned) : GC.AllocateArray<ElementChunk8191<T>>(chunks, pinned),
-        9362 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk31<ElementChunk151<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk31<ElementChunk151<T>>>>(chunks, pinned),
-        10922 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk2<ElementChunk43<ElementChunk127<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk2<ElementChunk43<ElementChunk127<T>>>>(chunks, pinned),
-        13107 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk17<ElementChunk257<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk17<ElementChunk257<T>>>>(chunks, pinned),
-        16383 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk43<ElementChunk127<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk43<ElementChunk127<T>>>>(chunks, pinned),
-        21845 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk5<ElementChunk17<ElementChunk257<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk5<ElementChunk17<ElementChunk257<T>>>>(chunks, pinned),
-        32767 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk7<ElementChunk31<ElementChunk151<T>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk7<ElementChunk31<ElementChunk151<T>>>>(chunks, pinned),
-        65535 => static (chunks, pinned, uninitialized) => uninitialized ? GC.AllocateUninitializedArray<ElementChunk3<ElementChunk5<ElementChunk17<ElementChunk257<T>>>>>(chunks, pinned) : GC.AllocateArray<ElementChunk3<ElementChunk5<ElementChunk17<ElementChunk257<T>>>>>(chunks, pinned),
-        _ => throw new UnreachableException()
-    };
+        return uninitialized
+            ? GC.AllocateUninitializedArray<TElement>(chunks, pinned)
+            : GC.AllocateArray<TElement>(chunks, pinned);
+    }
 
     private static int GetChunkLength()
     {
@@ -583,6 +167,50 @@ public sealed partial class BigArray<T>
         int chunkLength = GetChunkLength();
         int chunks = (int)((length / chunkLength) + (length % chunkLength == 0 ? 0 : 1));
 
-        return CreateBigArrayFactory(chunkLength)(chunks, pinned, uninitialized);
+        return CreateBigArrayFactory(chunkLength).Allocate(chunks, pinned, uninitialized);
+    }
+}
+
+file static class BigArrayChunkFactors
+{
+    private const int MaxChunkByteLength = 65535;
+
+    private static readonly ushort[] s_smallestPrimeFactors = CreateSmallestPrimeFactors();
+
+    internal static int GetPrimeFactor(int value)
+    {
+        Debug.Assert((uint)value <= MaxChunkByteLength);
+        return s_smallestPrimeFactors[value];
+    }
+
+    private static ushort[] CreateSmallestPrimeFactors()
+    {
+        ushort[] factors = new ushort[MaxChunkByteLength + 1];
+        factors[1] = 1;
+
+        for (int value = 2; value < factors.Length; value++)
+        {
+            if (factors[value] != 0)
+            {
+                continue;
+            }
+
+            factors[value] = (ushort)value;
+
+            if (value > MaxChunkByteLength / value)
+            {
+                continue;
+            }
+
+            for (int multiple = value * value; multiple <= MaxChunkByteLength; multiple += value)
+            {
+                if (factors[multiple] == 0)
+                {
+                    factors[multiple] = (ushort)value;
+                }
+            }
+        }
+
+        return factors;
     }
 }

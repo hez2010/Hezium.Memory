@@ -116,6 +116,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
         _length = length;
     }
 
+    [OverloadResolutionPriority(-1)]
     internal BigMemory(Array? storage, nint start, nint length)
     {
         _storage = storage;
@@ -388,6 +389,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
         _length = length;
     }
 
+    [OverloadResolutionPriority(-1)]
     internal BigReadOnlyMemory(Array? storage, nint start, nint length)
     {
         _storage = storage;
