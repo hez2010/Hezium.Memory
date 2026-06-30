@@ -529,6 +529,7 @@ public sealed partial class BigArray<T>
 
     // Must not be inlined to avoid invalid type combinations that would cause a TypeLoadException when the method is JITted.
     // Invalid type combinations won't be used because the method is only called with valid type combinations.
+    // The return type should not be changed to TElement[] for the same reason.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static Array AllocateArray<TElement>(int chunks, bool pinned, bool uninitialized)
     {
