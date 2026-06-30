@@ -215,9 +215,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
         try
         {
             GCHandle handle = GCHandle.FromIntPtr(PinnedGCHandle<Array>.ToIntPtr(pinned));
-#pragma warning disable CS8500
             void* pointer = Unsafe.AsPointer(ref Unsafe.Add(ref GetDataReference(storage), start));
-#pragma warning restore CS8500
             return new MemoryHandle(pointer, handle, pinnable: null);
         }
         catch
