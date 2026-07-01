@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -9,6 +10,7 @@ namespace Hezium.Memory;
 /// </summary>
 /// <typeparam name="T">The type of elements in the array.</typeparam>
 [CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigArray))]
+[DebuggerDisplay("IsEmpty = {IsEmpty}, Length = {(long)Length}")]
 public sealed partial class BigArray<T> : IEnumerable<T>
 {
     internal readonly Array _storage;

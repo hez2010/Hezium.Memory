@@ -1,5 +1,6 @@
-using System.Collections;
 using System.Buffers;
+using System.Collections;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,6 +11,7 @@ namespace Hezium.Memory;
 /// </summary>
 /// <typeparam name="T">The type of elements in the span.</typeparam>
 [CollectionBuilder(typeof(CollectionBuilders), nameof(CollectionBuilders.CreateBigSpan))]
+[DebuggerDisplay("IsEmpty = {IsEmpty}, Length = {(long)Length}")]
 public readonly ref struct BigSpan<T>
 {
     internal readonly ref T _first;

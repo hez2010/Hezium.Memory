@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -8,6 +9,7 @@ namespace Hezium.Memory;
 /// Represents a contiguous region of memory.
 /// </summary>
 /// <typeparam name="T">The type of elements in the memory.</typeparam>
+[DebuggerDisplay("IsEmpty = {IsEmpty}, Length = {(long)Length}")]
 public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
 {
     internal readonly Array? _storage;
