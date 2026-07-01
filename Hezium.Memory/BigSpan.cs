@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Collections;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -135,7 +137,7 @@ public readonly ref struct BigSpan<T>
     /// Returns a string that represents the current <see cref="BigSpan{T}"/>.
     /// </summary>
     /// <returns>A string that represents the current <see cref="BigSpan{T}"/>.</returns>
-    public new string ToString()
+    public override string ToString()
     {
         return $"{nameof(BigSpan<>)}<{typeof(T)}>[{_length}]";
     }
@@ -218,6 +220,49 @@ public readonly ref struct BigSpan<T>
     public static implicit operator BigSpan<T>(Span<T> span)
     {
         return new BigSpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
+    }
+
+#pragma warning disable CS0809
+    /// <summary>
+    /// This method is not supported and will throw a <see cref="NotSupportedException"/> if called.
+    /// </summary>
+    /// <param name="obj">The object to compare with the current instance.</param>
+    /// <returns>Does not return a value. Always throws a <see cref="NotSupportedException"/>.</returns>
+    /// <exception cref="NotSupportedException">Thrown always.</exception>
+    [Obsolete("Equals() on BigSpan<T> is not supported. Use the equality operator instead.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public override bool Equals([NotNullWhen(true)] object? obj) => throw new NotSupportedException();
+
+    /// <summary>
+    /// This method is not supported and will throw a <see cref="NotSupportedException"/> if called.
+    /// </summary>
+    /// <returns>Does not return a value. Always throws a <see cref="NotSupportedException"/>.</returns>
+    /// <exception cref="NotSupportedException">Thrown always.</exception>
+    [Obsolete("GetHashCode() on BigSpan<T> is not supported.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public override int GetHashCode() => throw new NotSupportedException();
+#pragma warning restore CS0809
+
+    /// <summary>
+    /// Compare two <see cref="BigSpan{T}"/> instances for equality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigSpan{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigSpan{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator ==(BigSpan<T> left, BigSpan<T> right)
+    {
+        return left._length == right._length && Unsafe.AreSame(ref left._first, ref right._first);
+    }
+
+    /// <summary>
+    /// Compare two <see cref="BigSpan{T}"/> instances for inequality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigSpan{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigSpan{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator !=(BigSpan<T> left, BigSpan<T> right)
+    {
+        return !(left == right);
     }
 
     /// <summary>
@@ -395,6 +440,15 @@ public readonly ref struct BigReadOnlySpan<T>
     }
 
     /// <summary>
+    /// Returns a string that represents the current <see cref="BigReadOnlySpan{T}"/>.
+    /// </summary>
+    /// <returns>A string that represents the current <see cref="BigReadOnlySpan{T}"/>.</returns>
+    public override string ToString()
+    {
+        return $"{nameof(BigReadOnlySpan<>)}<{typeof(T)}>[{_length}]";
+    }
+
+    /// <summary>
     /// Defines an implicit conversion from <see cref="ReadOnlySpan{T}"/> to <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
     /// <param name="span">The <see cref="ReadOnlySpan{T}"/> to convert.</param>
@@ -410,6 +464,49 @@ public readonly ref struct BigReadOnlySpan<T>
     public static implicit operator BigReadOnlySpan<T>(Span<T> span)
     {
         return new BigReadOnlySpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
+    }
+
+#pragma warning disable CS0809
+    /// <summary>
+    /// This method is not supported and will throw a <see cref="NotSupportedException"/> if called.
+    /// </summary>
+    /// <param name="obj">The object to compare with the current instance.</param>
+    /// <returns>Does not return a value. Always throws a <see cref="NotSupportedException"/>.</returns>
+    /// <exception cref="NotSupportedException">Thrown always.</exception>
+    [Obsolete("Equals() on BigReadOnlySpan<T> is not supported. Use the equality operator instead.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public override bool Equals([NotNullWhen(true)] object? obj) => throw new NotSupportedException();
+
+    /// <summary>
+    /// This method is not supported and will throw a <see cref="NotSupportedException"/> if called.
+    /// </summary>
+    /// <returns>Does not return a value. Always throws a <see cref="NotSupportedException"/>.</returns>
+    /// <exception cref="NotSupportedException">Thrown always.</exception>
+    [Obsolete("GetHashCode() on BigReadOnlySpan<T> is not supported.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public override int GetHashCode() => throw new NotSupportedException();
+#pragma warning restore CS0809
+
+    /// <summary>
+    /// Compare two <see cref="BigReadOnlySpan{T}"/> instances for equality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigReadOnlySpan{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigReadOnlySpan{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator ==(BigReadOnlySpan<T> left, BigReadOnlySpan<T> right)
+    {
+        return left._length == right._length && Unsafe.AreSame(in left._first, in right._first);
+    }
+
+    /// <summary>
+    /// Compare two <see cref="BigReadOnlySpan{T}"/> instances for inequality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigReadOnlySpan{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigReadOnlySpan{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator !=(BigReadOnlySpan<T> left, BigReadOnlySpan<T> right)
+    {
+        return !(left == right);
     }
 
     /// <summary>

@@ -277,6 +277,28 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     {
         return new BigReadOnlyMemory<T>(memory._storage, memory._start, memory._length);
     }
+
+    /// <summary>
+    /// Compares two <see cref="BigMemory{T}"/> instances for equality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigMemory{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigMemory{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator ==(BigMemory<T> left, BigMemory<T> right)
+    {
+        return left.Equals(right);
+    }
+
+    /// <summary>
+    /// Compares two <see cref="BigMemory{T}"/> instances for inequality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigMemory{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigMemory{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator !=(BigMemory<T> left, BigMemory<T> right)
+    {
+        return !(left == right);
+    }
 }
 
 /// <summary>
@@ -396,6 +418,15 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     }
 
     /// <summary>
+    /// Returns a string that represents the current <see cref="BigReadOnlyMemory{T}"/>.
+    /// </summary>
+    /// <returns>A string that represents the current <see cref="BigReadOnlyMemory{T}"/>.</returns>
+    public override string ToString()
+    {
+        return $"{nameof(BigReadOnlyMemory<>)}<{typeof(T)}>[{_length}]";
+    }
+
+    /// <summary>
     /// Creates a new <see cref="BigReadOnlyMemory{T}"/> that represents a slice of the current memory starting at the specified index.
     /// </summary>
     /// <param name="start">The index at which to start the slice.</param>
@@ -506,5 +537,27 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     public static implicit operator BigReadOnlyMemory<T>(ArraySegment<T> segment)
     {
         return new BigReadOnlyMemory<T>(segment.Array, segment.Offset, segment.Count);
+    }
+
+    /// <summary>
+    /// Compares two <see cref="BigReadOnlyMemory{T}"/> instances for equality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator ==(BigReadOnlyMemory<T> left, BigReadOnlyMemory<T> right)
+    {
+        return left.Equals(right);
+    }
+
+    /// <summary>
+    /// Compares two <see cref="BigReadOnlyMemory{T}"/> instances for inequality.
+    /// </summary>
+    /// <param name="left">The first <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
+    /// <param name="right">The second <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
+    /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    public static bool operator !=(BigReadOnlyMemory<T> left, BigReadOnlyMemory<T> right)
+    {
+        return !(left == right);
     }
 }
