@@ -209,7 +209,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     internal static unsafe MemoryHandle Pin(Array? storage, nint start)
     {
         if (storage is null) return default;
-        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>()) throw new ArgumentException("Object contains references.", "value");
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>()) throw new ArgumentException("Object contains references.", typeof(T).ToString());
 
         PinnedGCHandle<Array> pinned = new(storage);
         try
