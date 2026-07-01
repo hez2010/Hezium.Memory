@@ -549,6 +549,71 @@ public sealed class HeziumMemoryApiTests
     }
 
     [Fact]
+    public void BigSpan_Algorithms_LargeLengthAboveIntMaxValue()
+    {
+        if (!Environment.Is64BitProcess)
+        {
+            return;
+        }
+
+        const long LargeLengthValue = 3_000_000_000L;
+        nuint byteLength = checked((nuint)LargeLengthValue);
+        nint length = (nint)byteLength;
+        BigArray<byte> array = new(length);
+        BigSpan<byte> span = array.AsBigSpan();
+        nint chunkBoundary = Array.MaxLength;
+        nint lastIndex = length - 1;
+
+        span[lastIndex] = 0x01;
+
+        Assert.Equal(lastIndex, span.BinarySearch((byte)0x01));
+        Assert.Equal(lastIndex, span.BinarySearch((byte)0x01, Comparer<byte>.Default));
+        Assert.Equal(~length, span.BinarySearch((byte)0x02));
+        Assert.Equal(~length, span.BinarySearch((byte)0x02, Comparer<byte>.Default));
+
+        BigReadOnlySpan<byte> readOnlySpan = span;
+        Assert.Equal(lastIndex, readOnlySpan.BinarySearch((byte)0x01));
+        Assert.Equal(~length, readOnlySpan.BinarySearch((byte)0x02, Comparer<byte>.Default));
+
+        span[0] = 0x11;
+        span[chunkBoundary - 1] = 0x22;
+        span[chunkBoundary] = 0x33;
+        span[lastIndex] = 0x44;
+
+        Assert.Equal(length, span.Length);
+        Assert.Equal(0x22, span[chunkBoundary - 1]);
+        Assert.Equal(0x33, span[chunkBoundary]);
+
+        span.CopyTo(span);
+
+        Assert.True(span.TryCopyTo(span));
+        Assert.True(span.SequenceEqual(span));
+        Assert.Equal(0, span.SequenceCompareTo(span));
+        Assert.True(span.StartsWith(span));
+        Assert.True(span.EndsWith(span));
+        Assert.Equal(0, span.IndexOf((byte)0x11));
+        Assert.Equal(lastIndex, span.LastIndexOf((byte)0x44));
+        Assert.Equal(0, span.IndexOfAny((byte)0x11, (byte)0x55));
+        Assert.Equal(lastIndex, span.LastIndexOfAny((byte)0x44, (byte)0x55));
+        Assert.Equal(0, span.IndexOfAnyExcept((byte)0x00));
+        Assert.Equal(lastIndex, span.LastIndexOfAnyExcept((byte)0x00));
+        Assert.Equal(0, span.IndexOfAnyInRange((byte)0x10, (byte)0x12));
+        Assert.Equal(lastIndex, span.LastIndexOfAnyInRange((byte)0x40, (byte)0x45));
+
+        ArgumentOutOfRangeException? exception = null;
+        try
+        {
+            _ = span.ToArray();
+        }
+        catch (ArgumentOutOfRangeException caught)
+        {
+            exception = caught;
+        }
+
+        Assert.NotNull(exception);
+    }
+
+    [Fact]
     public void GC_BigArrayAllocationApis_Work()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => GC.AllocateBigArray<int>(-1));
