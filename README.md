@@ -1,6 +1,6 @@
 # Hezium.Memory
 
-![NuGet Version](https://img.shields.io/nuget/v/Hezium.Memory)
+[![NuGet Version](https://img.shields.io/nuget/v/Hezium.Memory)](https://www.nuget.org/packages/Hezium.Memory)
 
 `BigArray<T>`, `BigMemory<T>`, `BigReadOnlyMemory<T>`, `BigSpan<T>`, and `BigReadOnlySpan<T>` for .NET code that wants the `Array`/`Memory`/`Span` programming model with `nint` lengths and indexes.
 
