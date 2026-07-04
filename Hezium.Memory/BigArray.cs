@@ -96,20 +96,8 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         {
             if ((nuint)index >= (nuint)_length) ThrowHelpers.ThrowOutOfRange(nameof(index));
 
-            return ref Unsafe.Add(ref GetDataReference(), index);
+            return ref Unsafe.Add(ref MemoryExtensions.GetBigArrayDataReference(this), index);
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ref T GetDataReference(Array storage)
-    {
-        return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(storage));
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ref T GetDataReference()
-    {
-        return ref GetDataReference(_storage);
     }
 
     /// <summary>
@@ -145,7 +133,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan<T> AsBigSpan()
     {
-        return new BigSpan<T>(ref GetDataReference(), _length);
+        return new BigSpan<T>(ref MemoryExtensions.GetBigArrayDataReference(this), _length);
     }
 
     /// <summary>
@@ -220,6 +208,6 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     {
         if ((nuint)start > (nuint)_length || (nuint)length > (nuint)(_length - start)) ThrowHelpers.ThrowOutOfRange();
 
-        return MemoryMarshal.CreateSpan(ref Unsafe.Add(ref GetDataReference(), start), length);
+        return MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryExtensions.GetBigArrayDataReference(this), start), length);
     }
 }

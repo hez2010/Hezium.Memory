@@ -20,6 +20,7 @@ public static class MemoryExtensions
         /// <param name="length">The number of elements in the span.</param>
         /// <returns>A <see cref="BigSpan{T}"/> that represents the specified range of elements.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BigSpan<T> CreateBigSpan<T>(ref T first, nint length)
         {
             if (length < 0) ThrowHelpers.ThrowOutOfRange(nameof(length));
@@ -32,6 +33,7 @@ public static class MemoryExtensions
         /// <typeparam name="T">The type of elements in the <see cref="BigSpan{T}"/>.</typeparam>
         /// <param name="span">The <see cref="BigSpan{T}"/> to get the reference from.</param>
         /// <returns>A reference to the first element of the <see cref="BigSpan{T}"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T GetReference<T>(BigSpan<T> span)
         {
             return ref span._first;
@@ -43,9 +45,22 @@ public static class MemoryExtensions
         /// <typeparam name="T">The type of elements in the <see cref="BigReadOnlySpan{T}"/>.</typeparam>
         /// <param name="span">The <see cref="BigReadOnlySpan{T}"/> to get the reference from.</param>
         /// <returns>A read-only reference to the first element of the <see cref="BigReadOnlySpan{T}"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref readonly T GetReference<T>(BigReadOnlySpan<T> span)
         {
             return ref span._first;
+        }
+
+        /// <summary>
+        /// Returns a reference to the 0th element of <see cref="BigArray{T}"/>. If the array is empty, returns a reference to where the 0th element would have been stored. Such a reference may be used for pinning but must never be dereferenced.
+        /// </summary>
+        /// <typeparam name="T">The type of elements in the <see cref="BigArray{T}"/>.</typeparam>
+        /// <param name="array">The <see cref="BigArray{T}"/> to get the reference from.</param>
+        /// <returns>A reference to the first element of the <see cref="BigArray{T}"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref T GetBigArrayDataReference<T>(BigArray<T> array)
+        {
+            return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage));
         }
     }
 

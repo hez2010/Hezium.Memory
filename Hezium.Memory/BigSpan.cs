@@ -60,7 +60,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
     public BigSpan(BigArray<T> array)
     {
-        _first = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage));
+        _first = ref MemoryExtensions.GetBigArrayDataReference(array);
         _length = array._length;
     }
 
@@ -76,7 +76,7 @@ public readonly ref struct BigSpan<T>
         ArgumentNullException.ThrowIfNull(array);
         if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
-        _first = ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage)), start);
+        _first = ref Unsafe.Add(ref MemoryExtensions.GetBigArrayDataReference(array), start);
         _length = length;
     }
 
@@ -370,7 +370,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
     public BigReadOnlySpan(BigArray<T> array)
     {
-        _first = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage));
+        _first = ref MemoryExtensions.GetBigArrayDataReference(array);
         _length = array._length;
     }
 
@@ -385,7 +385,7 @@ public readonly ref struct BigReadOnlySpan<T>
         ArgumentNullException.ThrowIfNull(array);
         if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
-        _first = ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array._storage)), start);
+        _first = ref Unsafe.Add(ref MemoryExtensions.GetBigArrayDataReference(array), start);
         _length = length;
     }
 
