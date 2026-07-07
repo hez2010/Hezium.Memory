@@ -27,7 +27,7 @@ public class SpanAlgorithmBenchmarks
         BenchmarkHelpers.FillSequential(_destinationBigArray.AsBigSpan());
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("Fill")]
     public int JaggedFill()
     {
@@ -49,7 +49,7 @@ public class SpanAlgorithmBenchmarks
         return _destinationBigArray[(nint)(Length - 1)];
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("CopyTo")]
     public int JaggedCopyTo()
     {
@@ -72,7 +72,7 @@ public class SpanAlgorithmBenchmarks
         return _destinationBigArray[(nint)(Length - 1)];
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("SequenceEqual")]
     public bool JaggedSequenceEqual()
     {
@@ -97,7 +97,7 @@ public class SpanAlgorithmBenchmarks
         return _sourceBigArray.AsBigSpan().SequenceEqual(_destinationBigArray.AsBigSpan());
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("BinarySearch")]
     public long JaggedBinarySearch()
     {

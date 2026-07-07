@@ -25,7 +25,7 @@ public class SearchValuesBenchmarks
         BenchmarkHelpers.FillByteSearchData(_sourceBigArray.AsBigSpan(), 251);
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("IndexOfAny")]
     public long JaggedIndexOfAny()
     {
@@ -54,7 +54,7 @@ public class SearchValuesBenchmarks
         return _sourceBigArray.AsBigSpan().IndexOfAny(_searchValues);
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("LastIndexOfAny")]
     public long JaggedLastIndexOfAny()
     {

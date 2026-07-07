@@ -29,7 +29,7 @@ public class IndexedAccessBenchmarks
         BenchmarkHelpers.FillSequential(_loadBigArray.AsBigSpan());
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("RandomLoad")]
     public int JaggedRandomLoad()
     {
@@ -61,7 +61,7 @@ public class IndexedAccessBenchmarks
         return sum;
     }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("RandomStore")]
     public int JaggedRandomStore()
     {
@@ -96,5 +96,4 @@ public class IndexedAccessBenchmarks
 
         return checksum;
     }
-
 }

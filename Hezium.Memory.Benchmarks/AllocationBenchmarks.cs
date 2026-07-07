@@ -7,7 +7,7 @@ public class AllocationBenchmarks
     [Params(1_048_576L, 4_294_967_296L)]
     public long Length { get; set; }
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("Zeroed")]
     public JaggedArray<int> JaggedArray()
     {
