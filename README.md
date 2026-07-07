@@ -297,7 +297,7 @@ Console.WriteLine(readOnlyReference); // 43
 
 ## Benchmarks
 
-Benchmark agsinst `BigArray<T>` and `T[][]` (jagged array).
+Benchmark agsinst `BigArray<T>` and `T[][]` (jagged array). Chunk size for large arrays is `Array.MaxLength` for both implementations.
 
 Environment:
 
