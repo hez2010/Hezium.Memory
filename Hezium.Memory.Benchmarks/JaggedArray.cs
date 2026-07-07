@@ -6,8 +6,6 @@ namespace Hezium.Memory.Benchmarks;
 
 public sealed class JaggedArray<T>
 {
-    private const int MaxChunkByteLength = 65535;
-    private static readonly int s_chunkLength = CreateChunkLength();
     private readonly T[][] _chunks;
 
     public JaggedArray(nint length)
@@ -27,6 +25,7 @@ public sealed class JaggedArray<T>
 
     public int ChunkCount => _chunks.Length;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<T> GetChunkSpan(int chunkIndex)
     {
         return _chunks[chunkIndex];
@@ -42,8 +41,8 @@ public sealed class JaggedArray<T>
                 ThrowOutOfRange(nameof(index));
             }
 
-            ref var chunk = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunks), (int)(index / s_chunkLength));
-            return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunk), (int)(index % s_chunkLength));
+            ref var chunk = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_chunks), (int)(index / Array.MaxLength));
+            return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunk), (int)(index % Array.MaxLength));
         }
     }
 
@@ -54,24 +53,18 @@ public sealed class JaggedArray<T>
         throw new ArgumentOutOfRangeException(paramName);
     }
 
-    private static int CreateChunkLength()
-    {
-        int elementSize = Unsafe.SizeOf<T>();
-        return elementSize > MaxChunkByteLength
-            ? throw new NotSupportedException($"Type {typeof(T)} is too large to be used with {nameof(JaggedArray<>)}.")
-            : MaxChunkByteLength / elementSize;
-    }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetChunkCount(nint length)
     {
-        nint chunks = (length / s_chunkLength) + (length % s_chunkLength == 0 ? 0 : 1);
+        nint chunks = (length / Array.MaxLength) + (length % Array.MaxLength == 0 ? 0 : 1);
         return checked((int)chunks);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetChunkLength(nint length, int chunkIndex)
     {
-        nint start = (nint)chunkIndex * s_chunkLength;
+        nint start = (nint)chunkIndex * Array.MaxLength;
         nint remaining = length - start;
-        return remaining > s_chunkLength ? s_chunkLength : (int)remaining;
+        return remaining > Array.MaxLength ? Array.MaxLength : (int)remaining;
     }
 }
