@@ -11,6 +11,7 @@ namespace Hezium.Memory.Benchmarks;
 [CategoriesColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
+[GcServer(true)]
 public class SpanAlgorithmBenchmarks
 {
     private JaggedArray<int> _sourceJagged = null!;

@@ -12,6 +12,7 @@ namespace Hezium.Memory.Benchmarks;
 [CategoriesColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
+[GcServer(true)]
 public class SearchValuesBenchmarks
 {
     private JaggedArray<byte> _sourceJagged = null!;

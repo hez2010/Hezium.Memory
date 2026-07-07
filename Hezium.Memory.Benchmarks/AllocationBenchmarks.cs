@@ -10,6 +10,7 @@ namespace Hezium.Memory.Benchmarks;
 [CategoriesColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
+[GcServer(true)]
 public class AllocationBenchmarks
 {
     [Params(1_048_576L, 4_294_967_296L)]
