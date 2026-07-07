@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="Hezium.Memory/Hezium.Memory.csproj" />
+  <Project Path="Hezium.Memory.Benchmarks/Hezium.Memory.Benchmarks.csproj" />
   <Project Path="Hezium.Memory.Tests/Hezium.Memory.Tests.csproj" />
 </Solution>

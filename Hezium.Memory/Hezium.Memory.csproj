@@ -22,6 +22,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Hezium.Memory.Benchmarks" />
     <InternalsVisibleTo Include="Hezium.Memory.Tests" />
   </ItemGroup>
 

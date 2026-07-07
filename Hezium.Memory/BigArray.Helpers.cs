@@ -2364,7 +2364,7 @@ public sealed partial class BigArray<T>
     // Invalid type combinations won't be used because the method is only called with valid type combinations.
     // The return type should not be changed to TElement[] for the same reason.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static Array AllocateArray<TElement>(int chunks, bool pinned, bool uninitialized)
+    internal static Array AllocateArray<TElement>(int chunks, bool pinned, bool uninitialized)
     {
         return uninitialized
             ? GC.AllocateUninitializedArray<TElement>(chunks, pinned)

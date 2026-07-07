@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 namespace Hezium.Memory.Tests;
 
-public sealed class HeziumMemoryApiTests
+public sealed class CoreApiTests
 {
     [Fact]
     public void BigArray_CoreApis_Work()
