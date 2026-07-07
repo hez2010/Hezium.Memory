@@ -17,15 +17,15 @@ public class AllocationBenchmarks
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Zeroed")]
-    public JaggedArray<ushort> JaggedArray()
+    public JaggedArray<int> JaggedArray()
     {
-        return new JaggedArray<ushort>((nint)Length);
+        return new JaggedArray<int>((nint)Length);
     }
 
     [Benchmark]
     [BenchmarkCategory("Zeroed")]
-    public BigArray<ushort> BigArray()
+    public BigArray<int> BigArray()
     {
-        return new BigArray<ushort>((nint)Length);
+        return new BigArray<int>((nint)Length);
     }
 }

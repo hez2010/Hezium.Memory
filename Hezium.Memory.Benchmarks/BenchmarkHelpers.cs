@@ -1,9 +1,8 @@
-using Hezium.Memory;
-using Hezium.Memory.Benchmarks;
+namespace Hezium.Memory.Benchmarks;
 
 internal static class BenchmarkHelpers
 {
-    internal const ushort UInt16SearchValue = ushort.MaxValue;
+    internal const int SearchValue = int.MaxValue;
 
     internal static long[] CreateRandomIndices(long length, int count)
     {
@@ -18,36 +17,36 @@ internal static class BenchmarkHelpers
         return indices;
     }
 
-    internal static void FillSequential(JaggedArray<ushort> jagged)
+    internal static void FillSequential(JaggedArray<int> jagged)
     {
         ulong index = 0;
         ulong lastIndex = (ulong)(jagged.Length - 1);
 
         for (int i = 0; i < jagged.ChunkCount; i++)
         {
-            Span<ushort> chunk = jagged.GetChunkSpan(i);
+            Span<int> chunk = jagged.GetChunkSpan(i);
             for (int j = 0; j < chunk.Length; j++)
             {
-                chunk[j] = GetUInt16SequentialValue(index++, lastIndex);
+                chunk[j] = GetInt32SequentialValue(index++, lastIndex);
             }
         }
     }
 
-    internal static void FillSequential(BigSpan<ushort> span)
+    internal static void FillSequential(BigSpan<int> span)
     {
         ulong lastIndex = (ulong)(span.Length - 1);
 
         for (nint i = 0; i < span.Length; i++)
         {
-            span[i] = GetUInt16SequentialValue((ulong)i, lastIndex);
+            span[i] = GetInt32SequentialValue((ulong)i, lastIndex);
         }
     }
 
-    private static ushort GetUInt16SequentialValue(ulong index, ulong lastIndex)
+    private static int GetInt32SequentialValue(ulong index, ulong lastIndex)
     {
         return lastIndex == 0
-            ? (ushort)0
-            : (ushort)(index * UInt16SearchValue / lastIndex);
+            ? 0
+            : (int)(index * SearchValue / lastIndex);
     }
 
     internal static void FillByteSearchData(JaggedArray<byte> jagged, byte terminalValue)

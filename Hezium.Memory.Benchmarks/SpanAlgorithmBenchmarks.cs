@@ -13,10 +13,10 @@ namespace Hezium.Memory.Benchmarks;
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class SpanAlgorithmBenchmarks
 {
-    private JaggedArray<ushort> _sourceJagged = null!;
-    private JaggedArray<ushort> _destinationJagged = null!;
-    private BigArray<ushort> _sourceBigArray = null!;
-    private BigArray<ushort> _destinationBigArray = null!;
+    private JaggedArray<int> _sourceJagged = null!;
+    private JaggedArray<int> _destinationJagged = null!;
+    private BigArray<int> _sourceBigArray = null!;
+    private BigArray<int> _destinationBigArray = null!;
 
     [Params(1_048_576L, 4_294_967_296L)]
     public long Length { get; set; }
@@ -24,26 +24,26 @@ public class SpanAlgorithmBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _sourceJagged = new JaggedArray<ushort>((nint)Length);
-        _destinationJagged = new JaggedArray<ushort>((nint)Length);
+        _sourceJagged = new JaggedArray<int>((nint)Length);
+        _destinationJagged = new JaggedArray<int>((nint)Length);
         BenchmarkHelpers.FillSequential(_sourceJagged);
         BenchmarkHelpers.FillSequential(_destinationJagged);
 
-        _sourceBigArray = new BigArray<ushort>((nint)Length);
-        _destinationBigArray = new BigArray<ushort>((nint)Length);
+        _sourceBigArray = new BigArray<int>((nint)Length);
+        _destinationBigArray = new BigArray<int>((nint)Length);
         BenchmarkHelpers.FillSequential(_sourceBigArray.AsBigSpan());
         BenchmarkHelpers.FillSequential(_destinationBigArray.AsBigSpan());
     }
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Fill")]
-    public ushort JaggedFill()
+    public int JaggedFill()
     {
-        JaggedArray<ushort> jagged = _destinationJagged;
+        JaggedArray<int> jagged = _destinationJagged;
 
         for (int i = 0; i < jagged.ChunkCount; i++)
         {
-            jagged.GetChunkSpan(i).Fill((ushort)42);
+            jagged.GetChunkSpan(i).Fill(42);
         }
 
         return jagged[jagged.Length - 1];
@@ -51,18 +51,18 @@ public class SpanAlgorithmBenchmarks
 
     [Benchmark]
     [BenchmarkCategory("Fill")]
-    public ushort BigArrayFill()
+    public int BigArrayFill()
     {
-        _destinationBigArray.AsBigSpan().Fill((ushort)42);
+        _destinationBigArray.AsBigSpan().Fill(42);
         return _destinationBigArray[(nint)(Length - 1)];
     }
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("CopyTo")]
-    public ushort JaggedCopyTo()
+    public int JaggedCopyTo()
     {
-        JaggedArray<ushort> source = _sourceJagged;
-        JaggedArray<ushort> destination = _destinationJagged;
+        JaggedArray<int> source = _sourceJagged;
+        JaggedArray<int> destination = _destinationJagged;
 
         for (int i = 0; i < source.ChunkCount; i++)
         {
@@ -74,7 +74,7 @@ public class SpanAlgorithmBenchmarks
 
     [Benchmark]
     [BenchmarkCategory("CopyTo")]
-    public ushort BigArrayCopyTo()
+    public int BigArrayCopyTo()
     {
         _sourceBigArray.AsBigSpan().CopyTo(_destinationBigArray.AsBigSpan());
         return _destinationBigArray[(nint)(Length - 1)];
@@ -84,8 +84,8 @@ public class SpanAlgorithmBenchmarks
     [BenchmarkCategory("SequenceEqual")]
     public bool JaggedSequenceEqual()
     {
-        JaggedArray<ushort> source = _sourceJagged;
-        JaggedArray<ushort> destination = _destinationJagged;
+        JaggedArray<int> source = _sourceJagged;
+        JaggedArray<int> destination = _destinationJagged;
 
         for (int i = 0; i < source.ChunkCount; i++)
         {
@@ -111,12 +111,12 @@ public class SpanAlgorithmBenchmarks
     {
         long low = 0;
         long high = Length - 1;
-        ushort target = BenchmarkHelpers.UInt16SearchValue;
+        int target = BenchmarkHelpers.SearchValue;
 
         while (low <= high)
         {
             long index = low + ((high - low) >> 1);
-            ushort current = _sourceJagged[(nint)index];
+            int current = _sourceJagged[(nint)index];
 
             if (current == target)
             {
@@ -140,7 +140,7 @@ public class SpanAlgorithmBenchmarks
     [BenchmarkCategory("BinarySearch")]
     public nint BigArrayBinarySearch()
     {
-        return _sourceBigArray.AsBigSpan().BinarySearch(BenchmarkHelpers.UInt16SearchValue);
+        return _sourceBigArray.AsBigSpan().BinarySearch(BenchmarkHelpers.SearchValue);
     }
 
 }

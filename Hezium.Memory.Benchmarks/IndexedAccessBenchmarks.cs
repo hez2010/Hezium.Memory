@@ -14,10 +14,10 @@ public class IndexedAccessBenchmarks
 {
     private const int OperationCount = 8192;
 
-    private JaggedArray<ushort> _loadJagged = null!;
-    private JaggedArray<ushort> _storeJagged = null!;
-    private BigArray<ushort> _loadBigArray = null!;
-    private BigArray<ushort> _storeBigArray = null!;
+    private JaggedArray<int> _loadJagged = null!;
+    private JaggedArray<int> _storeJagged = null!;
+    private BigArray<int> _loadBigArray = null!;
+    private BigArray<int> _storeBigArray = null!;
     private long[] _indices = null!;
 
     [Params(1_048_576L, 4_294_967_296L)]
@@ -28,12 +28,12 @@ public class IndexedAccessBenchmarks
     {
         _indices = BenchmarkHelpers.CreateRandomIndices(Length, OperationCount);
 
-        _loadJagged = new JaggedArray<ushort>((nint)Length);
-        _storeJagged = new JaggedArray<ushort>((nint)Length);
+        _loadJagged = new JaggedArray<int>((nint)Length);
+        _storeJagged = new JaggedArray<int>((nint)Length);
         BenchmarkHelpers.FillSequential(_loadJagged);
 
-        _loadBigArray = new BigArray<ushort>((nint)Length);
-        _storeBigArray = new BigArray<ushort>((nint)Length);
+        _loadBigArray = new BigArray<int>((nint)Length);
+        _storeBigArray = new BigArray<int>((nint)Length);
         BenchmarkHelpers.FillSequential(_loadBigArray.AsBigSpan());
     }
 
@@ -42,7 +42,7 @@ public class IndexedAccessBenchmarks
     public int JaggedRandomLoad()
     {
         int sum = 0;
-        JaggedArray<ushort> jagged = _loadJagged;
+        JaggedArray<int> jagged = _loadJagged;
         long[] indices = _indices;
 
         for (int i = 0; i < indices.Length; i++)
@@ -58,7 +58,7 @@ public class IndexedAccessBenchmarks
     public int BigArrayRandomLoad()
     {
         int sum = 0;
-        BigArray<ushort> array = _loadBigArray;
+        BigArray<int> array = _loadBigArray;
         long[] indices = _indices;
 
         for (int i = 0; i < indices.Length; i++)
@@ -74,12 +74,12 @@ public class IndexedAccessBenchmarks
     public int JaggedRandomStore()
     {
         int checksum = 0;
-        JaggedArray<ushort> jagged = _storeJagged;
+        JaggedArray<int> jagged = _storeJagged;
         long[] indices = _indices;
 
         for (int i = 0; i < indices.Length; i++)
         {
-            ushort value = (ushort)(i + 1);
+            int value = i + 1;
             jagged[(nint)indices[i]] = value;
             checksum += value;
         }
@@ -92,12 +92,12 @@ public class IndexedAccessBenchmarks
     public int BigArrayRandomStore()
     {
         int checksum = 0;
-        BigArray<ushort> array = _storeBigArray;
+        BigArray<int> array = _storeBigArray;
         long[] indices = _indices;
 
         for (int i = 0; i < indices.Length; i++)
         {
-            ushort value = (ushort)(i + 1);
+            int value = i + 1;
             array[(nint)indices[i]] = value;
             checksum += value;
         }
