@@ -1,15 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Order;
 
 namespace Hezium.Memory.Benchmarks;
 
-[MemoryDiagnoser]
-[IterationCount(15)]
-[IterationTime(100)]
-[CategoriesColumn]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class IndexedAccessBenchmarks
 {
     private const int OperationCount = 8192;

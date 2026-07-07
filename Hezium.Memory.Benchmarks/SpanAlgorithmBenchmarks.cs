@@ -1,16 +1,8 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Order;
 using Hezium.Memory;
 
 namespace Hezium.Memory.Benchmarks;
 
-[MemoryDiagnoser]
-[IterationCount(15)]
-[IterationTime(100)]
-[CategoriesColumn]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class SpanAlgorithmBenchmarks
 {
     private JaggedArray<int> _sourceJagged = null!;
