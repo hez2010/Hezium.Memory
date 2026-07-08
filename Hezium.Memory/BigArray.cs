@@ -210,4 +210,19 @@ public sealed partial class BigArray<T> : IEnumerable<T>
 
         return MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryExtensions.GetBigArrayDataReference(this), start), length);
     }
+
+    /// <summary>
+    /// Gets a reference to the element that can be used for pinning.
+    /// </summary>
+    /// <returns>A reference to the first element of the span, or a null reference if the array is empty.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T GetPinnableReference()
+    {
+        if (_length == 0)
+        {
+            return ref Unsafe.NullRef<T>();
+        }
+
+        return ref MemoryExtensions.GetBigArrayDataReference(this);
+    }
 }

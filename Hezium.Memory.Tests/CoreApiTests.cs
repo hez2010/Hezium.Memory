@@ -93,6 +93,23 @@ public sealed class CoreApiTests
         array2.Fill(null);
         array2[3] = 42;
         Assert.Equal([null, null, null, 42, null, null, null], array2.ToArray());
+
+        BigArray<int> bigArray = GC.AllocateBigArray<int>(8, pinned: true);
+        for (int i = 0; i < bigArray.Length; ++i)
+        {
+            bigArray[i] = i * 2;
+        }
+
+        unsafe
+        {
+            fixed (int* ttPtr = bigArray)
+            {
+                for (int i = 0; i < bigArray.Length; ++i)
+                {
+                    Assert.Equal(bigArray[i], *(ttPtr + i));
+                }
+            }
+        }
     }
 
     [Fact]
