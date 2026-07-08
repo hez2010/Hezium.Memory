@@ -192,7 +192,9 @@ public readonly ref struct BigSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T GetPinnableReference()
     {
-        return ref _first;
+        ref T ret = ref Unsafe.NullRef<T>();
+        if (_length != 0) ret = ref _first;
+        return ref ret;
     }
 
     /// <summary>
@@ -559,7 +561,9 @@ public readonly ref struct BigReadOnlySpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref readonly T GetPinnableReference()
     {
-        return ref _first;
+        ref readonly T ret = ref Unsafe.NullRef<T>();
+        if (_length != 0) ret = ref _first;
+        return ref ret;
     }
 
     /// <summary>

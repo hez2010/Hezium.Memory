@@ -8,6 +8,8 @@ namespace Hezium.Memory.Tests;
 
 public sealed class CoreApiTests
 {
+    private static readonly int[] expected = new[] { 1, 2, 3, 4, 5 };
+
     [Fact]
     public void BigArray_CoreApis_Work()
     {
@@ -47,7 +49,7 @@ public sealed class CoreApiTests
             enumerated.Add(value);
         }
 
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, enumerated);
+        Assert.Equal(expected, enumerated);
 
         IEnumerator enumerator = ((IEnumerable)array).GetEnumerator();
         Assert.True(enumerator.MoveNext());
@@ -55,6 +57,11 @@ public sealed class CoreApiTests
         enumerator.Reset();
         Assert.True(enumerator.MoveNext());
         Assert.Equal(1, enumerator.Current);
+
+        BigArray<int> empty = new(0);
+        Assert.True(Unsafe.IsNullRef(ref empty.GetPinnableReference()));
+        Assert.True(Unsafe.IsNullRef(ref empty.AsBigSpan().GetPinnableReference()));
+        Assert.True(Unsafe.IsNullRef(in ((BigReadOnlySpan<int>)empty.AsBigSpan()).GetPinnableReference()));
     }
 
     [Fact]
@@ -94,7 +101,7 @@ public sealed class CoreApiTests
         array2[3] = 42;
         Assert.Equal([null, null, null, 42, null, null, null], array2.ToArray());
 
-        BigArray<int> bigArray = GC.AllocateBigArray<int>(8, pinned: true);
+        BigArray<int> bigArray = new(8);
         for (int i = 0; i < bigArray.Length; ++i)
         {
             bigArray[i] = i * 2;
@@ -110,6 +117,11 @@ public sealed class CoreApiTests
                 }
             }
         }
+
+        BigArray<int> empty = new(0);
+        Assert.False(Unsafe.IsNullRef(ref MemoryMarshal.GetBigArrayDataReference(empty)));
+        Assert.False(Unsafe.IsNullRef(ref MemoryMarshal.GetReference(empty.AsBigSpan())));
+        Assert.False(Unsafe.IsNullRef(in MemoryMarshal.GetReference((BigReadOnlySpan<int>)empty.AsBigSpan())));
     }
 
     [Fact]
@@ -149,6 +161,8 @@ public sealed class CoreApiTests
         }
     }
 
+    private static readonly int[] valuesArray = new[] { 1, 3 };
+
     [Fact]
     public void BigSpan_ExtensionApis_Work()
     {
@@ -178,8 +192,8 @@ public sealed class CoreApiTests
         Assert.Equal(2, span.IndexOfAny(needles));
         Assert.Equal(2, span.LastIndexOfAny(needles));
         Assert.True(span.ContainsAny(needles));
-        Assert.Equal(1, span.IndexOfAnyExcept(new[] { 1, 3 }));
-        Assert.Equal(3, span.LastIndexOfAnyExcept(new[] { 1, 3 }));
+        Assert.Equal(1, span.IndexOfAnyExcept(valuesArray));
+        Assert.Equal(3, span.LastIndexOfAnyExcept(valuesArray));
         Assert.True(span.ContainsAnyExcept(new[] { 1, 3 }));
 
         Assert.True(span.SequenceEqual((BigReadOnlySpan<int>)values.AsSpan()));
@@ -199,6 +213,8 @@ public sealed class CoreApiTests
         Assert.True(span.ContainsAnyExceptInRange(2, 3));
     }
 
+    private static readonly int[] trimElements = new[] { 0, 2 };
+
     [Fact]
     public void BigSpan_CopyConvertTrimSplitAndSortApis_Work()
     {
@@ -206,9 +222,9 @@ public sealed class CoreApiTests
         BigSpan<int> span = values;
 
         Assert.Equal([2, 1, 2], ToArray(span.Trim(0)));
-        Assert.Equal([1], ToArray(span.Trim(new[] { 0, 2 })));
+        Assert.Equal([1], ToArray(span.Trim(trimElements)));
         Assert.Equal([2, 1, 2, 0], ToArray(span.TrimStart(0)));
-        Assert.Equal([1, 2, 0], ToArray(span.TrimStart(new[] { 0, 2 })));
+        Assert.Equal([1, 2, 0], ToArray(span.TrimStart(trimElements)));
         Assert.Equal([0, 2, 1, 2], ToArray(span.TrimEnd(0)));
         Assert.Equal([0, 2, 1], ToArray(span.TrimEnd(new[] { 0, 2 })));
 
@@ -270,6 +286,8 @@ public sealed class CoreApiTests
         span.Fill(4);
         Assert.Equal([4, 4, 4, 4, 4], values);
     }
+
+    private static readonly int[] valueArray = new[] { 1, 2 };
 
     [Fact]
     public unsafe void BigReadOnlySpan_CoreAndExtensionApis_Work()
@@ -349,7 +367,7 @@ public sealed class CoreApiTests
         Assert.False(span.ContainsAnyExcept(1, 2, 3));
         Assert.True(span.SequenceEqual((BigReadOnlySpan<int>)values));
         Assert.True(span.SequenceCompareTo([1, 2, 4]) < 0);
-        Assert.True(span.StartsWith(new[] { 1, 2 }));
+        Assert.True(span.StartsWith(valueArray));
         Assert.True(span.EndsWith(new[] { 2, 1 }));
         Assert.Equal([1, 1, 1], SegmentLengths(span.Split(2)));
         Assert.Equal([0, 0, 1, 0, 0], SegmentLengths(span.SplitAny(new[] { 1, 2 })));
