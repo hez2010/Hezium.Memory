@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,6 +11,21 @@ namespace Hezium.Memory;
 /// </summary>
 public static class MemoryExtensions
 {
+    private const int MinProcessingChunkLength = 65536;
+
+    internal static readonly int MaxProcessingChunkLength =
+        GetConfiguredValue<int>(AppContext.GetData("Hezium.Memory.MaxProcessingChunkLength")) is int value && value > 0
+            ? int.Clamp(value, MinProcessingChunkLength, Array.MaxLength)
+            : Array.MaxLength;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static T GetConfiguredValue<T>(object? value) where T : struct, INumber<T> => value switch
+    {
+        T configValue => configValue,
+        string stringValue when T.TryParse(stringValue, null, out T parsedValue) => parsedValue,
+        _ => T.Zero
+    };
+
     extension(MemoryMarshal)
     {
         /// <summary>
@@ -85,7 +101,7 @@ public static class MemoryExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetChunkLength(nint remaining)
     {
-        return remaining > Array.MaxLength ? Array.MaxLength : (int)remaining;
+        return remaining > MaxProcessingChunkLength ? MaxProcessingChunkLength : (int)remaining;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -157,7 +173,7 @@ public static class MemoryExtensions
     private static void CopyToCore<T>(BigReadOnlySpan<T> source, Span<T> destination)
     {
         if (source._length == 0) return;
-        CreateReadOnlySpan(source, (int)source._length).CopyTo(destination);
+        CopyToCore(source, new BigSpan<T>(ref MemoryMarshal.GetReference(destination), source._length));
     }
 
     private static T[] ToArrayCore<T>(BigReadOnlySpan<T> span)
@@ -248,7 +264,7 @@ public static class MemoryExtensions
     {
         ArgumentNullException.ThrowIfNull(comparable);
 
-        if (span._length <= int.MaxValue)
+        if (span._length <= MaxProcessingChunkLength)
         {
             return CreateReadOnlySpan(span, (int)span._length).BinarySearch(comparable);
         }
@@ -273,7 +289,7 @@ public static class MemoryExtensions
     {
         ArgumentNullException.ThrowIfNull(comparer);
 
-        if (span._length <= int.MaxValue)
+        if (span._length <= MaxProcessingChunkLength)
         {
             return CreateReadOnlySpan(span, (int)span._length).BinarySearch(value, comparer);
         }
@@ -298,7 +314,7 @@ public static class MemoryExtensions
         if (values._length == 0) return -1;
 
         nint offset = 0;
-        if (values._length <= int.MaxValue)
+        if (values._length <= MaxProcessingChunkLength)
         {
             ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
             while (span._length > 0)
@@ -393,7 +409,7 @@ public static class MemoryExtensions
         if (values._length == 0) return -1;
 
         nint remaining = span._length;
-        if (values._length <= int.MaxValue)
+        if (values._length <= MaxProcessingChunkLength)
         {
             ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
             while (remaining > 0)
@@ -502,7 +518,7 @@ public static class MemoryExtensions
     private static nint IndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values)
     {
         nint offset = 0;
-        if (values._length <= int.MaxValue)
+        if (values._length <= MaxProcessingChunkLength)
         {
             ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
             while (span._length > 0)
@@ -602,7 +618,7 @@ public static class MemoryExtensions
     private static nint LastIndexOfAnyExceptCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values)
     {
         nint remaining = span._length;
-        if (values._length <= int.MaxValue)
+        if (values._length <= MaxProcessingChunkLength)
         {
             ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
             while (remaining > 0)
@@ -770,7 +786,7 @@ public static class MemoryExtensions
     private static nint CountTrimStartCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
     {
         nint trimmed = 0;
-        if (trimElements._length <= int.MaxValue)
+        if (trimElements._length <= MaxProcessingChunkLength)
         {
             ReadOnlySpan<T> trimElementSpan = CreateReadOnlySpan(trimElements, (int)trimElements._length);
             while (span._length > 0)
@@ -825,7 +841,7 @@ public static class MemoryExtensions
     {
         nint trimmed = 0;
         nint remainingLength = span._length;
-        if (trimElements._length <= int.MaxValue)
+        if (trimElements._length <= MaxProcessingChunkLength)
         {
             ReadOnlySpan<T> trimElementSpan = CreateReadOnlySpan(trimElements, (int)trimElements._length);
             while (remainingLength > 0)
@@ -897,7 +913,7 @@ public static class MemoryExtensions
     private static void SortCore<T>(BigSpan<T> span)
     {
         if (span._length <= 1) return;
-        if (span._length <= int.MaxValue)
+        if (span._length <= MaxProcessingChunkLength)
         {
             CreateSpan(span, (int)span._length).Sort();
             return;
@@ -912,7 +928,7 @@ public static class MemoryExtensions
         if (span._length <= 1) return;
         comparer ??= Comparer<T>.Default;
 
-        if (span._length <= int.MaxValue)
+        if (span._length <= MaxProcessingChunkLength)
         {
             CreateSpan(span, (int)span._length).Sort(comparer);
             return;
@@ -925,7 +941,7 @@ public static class MemoryExtensions
     private static void SortCore<T>(BigSpan<T> span, Comparison<T> comparison)
     {
         if (span._length <= 1) return;
-        if (span._length <= int.MaxValue)
+        if (span._length <= MaxProcessingChunkLength)
         {
             CreateSpan(span, (int)span._length).Sort(comparison);
             return;
@@ -972,7 +988,7 @@ public static class MemoryExtensions
         BigSpan<T> destination = buffer.AsBigSpan();
         bool sourceIsScratch = false;
 
-        for (nint width = Array.MaxLength; width < span._length;)
+        for (nint width = MaxProcessingChunkLength; width < span._length;)
         {
             MergePass(source, destination, width, comparer);
             BigSpan<T> previousSource = source;
@@ -999,7 +1015,7 @@ public static class MemoryExtensions
         BigSpan<T> destination = buffer.AsBigSpan();
         bool sourceIsScratch = false;
 
-        for (nint width = Array.MaxLength; width < span._length;)
+        for (nint width = MaxProcessingChunkLength; width < span._length;)
         {
             MergePass(source, destination, width, comparison);
             BigSpan<T> previousSource = source;

@@ -203,6 +203,10 @@ public sealed class CoreApiTests
         span.CopyTo(copy);
         Assert.Equal(values, copy);
 
+        int[] overlappingCopy = [1, 2, 3, 4, 5, 6];
+        ((BigSpan<int>)overlappingCopy.AsSpan(0, 5)).CopyTo(overlappingCopy.AsSpan(1));
+        Assert.Equal([1, 1, 2, 3, 4, 5], overlappingCopy);
+
         int[] shortCopy = new int[4];
         Assert.False(span.TryCopyTo(shortCopy));
         Assert.True(span.TryCopyTo(copy));

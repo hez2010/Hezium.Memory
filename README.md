@@ -250,6 +250,18 @@ foreach (BigReadOnlySpan<byte> segment in bytes.SplitAny(separators))
 }
 ```
 
+The maximum number of elements processed by the underlying span operations at once can be configured at application startup:
+
+```xml
+<ItemGroup>
+  <RuntimeHostConfigurationOption Include="Hezium.Memory.MaxProcessingChunkLength" Value="1048576" />
+</ItemGroup>
+```
+
+`Hezium.Memory.MaxProcessingChunkLength` defaults to `Array.MaxLength`. It lets applications tune the processing granularity of span-based algorithms for their workload; smaller chunks also introduce more per-chunk overhead. The value is process-wide, is read once, and does not change the `BigArray<T>` storage layout.
+
+The configured value is clamped to the range from `65536` through `Array.MaxLength`.
+
 ## MemoryMarshal Helpers
 
 `MemoryMarshal` extension members make it possible to create and inspect big spans from raw references.
