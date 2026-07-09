@@ -32,8 +32,8 @@ jobs:
     - name: Test
       run: dotnet test -c Release --no-build --verbosity normal
     - name: Pack
-      if: success() && github.event_name == 'workflow_dispatch' && inputs.publish
-      run: dotnet pack -c Release -o artifacts
+      if: success()
+      run: dotnet pack Hezium.Memory -c Release -o artifacts
 
     - name: NuGet login
       if: success() && github.event_name == 'workflow_dispatch' && inputs.publish
