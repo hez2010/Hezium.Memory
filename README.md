@@ -36,6 +36,8 @@ BigArray<byte> scratch = GC.AllocateUninitializedBigArray<byte>(length);
 BigArray<byte> pinned = GC.AllocateBigArray<byte>(length, pinned: true);
 ```
 
+For more details about how this library was built, see the [Introduction](https://dev.to/hez2010/build-a-very-large-managed-array-in-net-5aop).
+
 ## Why
 
 Some workloads are naturally one-dimensional and very large: columnar data, precomputed lookup tables, native interop buffers, generated datasets, simulation state, and file-backed processing pipelines. The important part is not only "can I allocate a lot of elements", but "can I keep using the same mental model when I do?"
