@@ -712,8 +712,8 @@ public ref struct BigSpanSplitEnumerator<T>
             return true;
         }
 
-        Current = _remaining.Slice(0, index);
-        _remaining = _remaining.Slice(index + 1);
+        Current = MemoryExtensions.SliceUnchecked(_remaining, 0, index);
+        _remaining = MemoryExtensions.SliceUnchecked(_remaining, index + 1);
         return true;
     }
 }
@@ -768,8 +768,8 @@ public ref struct BigSpanSearchValuesSplitEnumerator<T>
             return true;
         }
 
-        Current = _remaining.Slice(0, index);
-        _remaining = _remaining.Slice(index + 1);
+        Current = MemoryExtensions.SliceUnchecked(_remaining, 0, index);
+        _remaining = MemoryExtensions.SliceUnchecked(_remaining, index + 1);
         return true;
     }
 }

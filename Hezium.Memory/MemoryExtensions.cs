@@ -87,6 +87,24 @@ public static class MemoryExtensions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref T UnsafeAt<T>(BigSpan<T> span, nint index)
+    {
+        return ref Unsafe.Add(ref span._first, index);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref readonly T UnsafeAt<T>(BigReadOnlySpan<T> span, nint index)
+    {
+        return ref Unsafe.Add(ref Unsafe.AsRef(in span._first), index);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref readonly T UnsafeAt<T>(ReadOnlySpan<T> span, int index)
+    {
+        return ref Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Span<T> CreateSpan<T>(BigSpan<T> span, int length)
     {
         return MemoryMarshal.CreateSpan(ref span._first, length);
@@ -111,7 +129,7 @@ public static class MemoryExtensions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static BigReadOnlySpan<T> SliceUnchecked<T>(BigReadOnlySpan<T> span, nint start, nint length)
+    internal static BigReadOnlySpan<T> SliceUnchecked<T>(BigReadOnlySpan<T> span, nint start, nint length)
     {
         return new BigReadOnlySpan<T>(ref Unsafe.Add(ref Unsafe.AsRef(in span._first), start), length);
     }
@@ -123,7 +141,7 @@ public static class MemoryExtensions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static BigReadOnlySpan<T> SliceUnchecked<T>(BigReadOnlySpan<T> span, nint start)
+    internal static BigReadOnlySpan<T> SliceUnchecked<T>(BigReadOnlySpan<T> span, nint start)
     {
         return SliceUnchecked(span, start, span._length - start);
     }
@@ -140,7 +158,8 @@ public static class MemoryExtensions
         }
 
         elementOffset = byteOffset / elementSize;
-        return elementOffset < source._length && elementOffset > -destination._length;
+        return (nuint)elementOffset < (nuint)source._length ||
+               (nuint)elementOffset > (nuint)(-destination._length);
     }
 
     private static void CopyToCore<T>(BigReadOnlySpan<T> source, BigSpan<T> destination)
@@ -172,7 +191,6 @@ public static class MemoryExtensions
 
     private static void CopyToCore<T>(BigReadOnlySpan<T> source, Span<T> destination)
     {
-        if (source._length == 0) return;
         CopyToCore(source, new BigSpan<T>(ref MemoryMarshal.GetReference(destination), source._length));
     }
 
@@ -271,11 +289,10 @@ public static class MemoryExtensions
 
         nint low = 0;
         nint high = span._length - 1;
-        ref T reference = ref Unsafe.AsRef(in span._first);
         while (low <= high)
         {
             nint index = low + ((high - low) >> 1);
-            int comparison = comparable.CompareTo(Unsafe.Add(ref reference, index));
+            int comparison = comparable.CompareTo(UnsafeAt(span, index));
             if (comparison == 0) return index;
             if (comparison > 0) low = index + 1;
             else high = index - 1;
@@ -296,11 +313,10 @@ public static class MemoryExtensions
 
         nint low = 0;
         nint high = span._length - 1;
-        ref T reference = ref Unsafe.AsRef(in span._first);
         while (low <= high)
         {
             nint index = low + ((high - low) >> 1);
-            int comparison = comparer.Compare(value, Unsafe.Add(ref reference, index));
+            int comparison = comparer.Compare(value, UnsafeAt(span, index));
             if (comparison == 0) return index;
             if (comparison > 0) low = index + 1;
             else high = index - 1;
@@ -341,7 +357,7 @@ public static class MemoryExtensions
                 int valueChunkLength = GetChunkLength(remainingValues._length);
                 int index = chunk.IndexOfAny(CreateReadOnlySpan(remainingValues, valueChunkLength));
                 if (index == 0) return offset;
-                if ((uint)index < (uint)bestIndex || bestIndex < 0) bestIndex = index;
+                if ((uint)index < (uint)bestIndex) bestIndex = index;
 
                 remainingValues = SliceUnchecked(remainingValues, valueChunkLength);
             }
@@ -540,7 +556,7 @@ public static class MemoryExtensions
             ReadOnlySpan<T> chunk = CreateReadOnlySpan(span, chunkLength);
             for (int i = 0; i < chunk.Length; i++)
             {
-                if (IndexOfCore(values, chunk[i], null) < 0) return offset + i;
+                if (IndexOfCore(values, UnsafeAt(chunk, i), null) < 0) return offset + i;
             }
 
             offset += chunkLength;
@@ -641,7 +657,7 @@ public static class MemoryExtensions
             ReadOnlySpan<T> chunk = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength);
             for (int i = chunk.Length - 1; i >= 0; i--)
             {
-                if (IndexOfCore(values, chunk[i], null) < 0) return chunkStart + i;
+                if (IndexOfCore(values, UnsafeAt(chunk, i), null) < 0) return chunkStart + i;
             }
 
             remaining = chunkStart;
@@ -808,7 +824,7 @@ public static class MemoryExtensions
             ReadOnlySpan<T> chunk = CreateReadOnlySpan(span, chunkLength);
             for (int i = 0; i < chunk.Length; i++)
             {
-                if (IndexOfCore(trimElements, chunk[i], null) < 0) return trimmed + i;
+                if (IndexOfCore(trimElements, UnsafeAt(chunk, i), null) < 0) return trimmed + i;
             }
 
             trimmed += chunkLength;
@@ -865,7 +881,7 @@ public static class MemoryExtensions
             ReadOnlySpan<T> chunk = CreateReadOnlySpan(SliceUnchecked(span, chunkStart, chunkLength), chunkLength);
             for (int i = chunk.Length - 1; i >= 0; i--)
             {
-                if (IndexOfCore(trimElements, chunk[i], null) < 0) return trimmed + (chunk.Length - 1 - i);
+                if (IndexOfCore(trimElements, UnsafeAt(chunk, i), null) < 0) return trimmed + (chunk.Length - 1 - i);
             }
 
             trimmed += chunkLength;
@@ -1096,22 +1112,18 @@ public static class MemoryExtensions
         nint leftIndex = 0;
         nint rightIndex = 0;
         nint destinationIndex = 0;
-        ref T leftReference = ref Unsafe.AsRef(in left._first);
-        ref T rightReference = ref Unsafe.AsRef(in right._first);
-        ref T destinationReference = ref destination._first;
-
         while (leftIndex < left._length && rightIndex < right._length)
         {
-            ref T leftValue = ref Unsafe.Add(ref leftReference, leftIndex);
-            ref T rightValue = ref Unsafe.Add(ref rightReference, rightIndex);
+            ref readonly T leftValue = ref UnsafeAt(left, leftIndex);
+            ref readonly T rightValue = ref UnsafeAt(right, rightIndex);
             if (comparer.Compare(leftValue, rightValue) <= 0)
             {
-                Unsafe.Add(ref destinationReference, destinationIndex) = leftValue;
+                UnsafeAt(destination, destinationIndex) = leftValue;
                 leftIndex++;
             }
             else
             {
-                Unsafe.Add(ref destinationReference, destinationIndex) = rightValue;
+                UnsafeAt(destination, destinationIndex) = rightValue;
                 rightIndex++;
             }
 
@@ -1133,22 +1145,18 @@ public static class MemoryExtensions
         nint leftIndex = 0;
         nint rightIndex = 0;
         nint destinationIndex = 0;
-        ref T leftReference = ref Unsafe.AsRef(in left._first);
-        ref T rightReference = ref Unsafe.AsRef(in right._first);
-        ref T destinationReference = ref destination._first;
-
         while (leftIndex < left._length && rightIndex < right._length)
         {
-            ref T leftValue = ref Unsafe.Add(ref leftReference, leftIndex);
-            ref T rightValue = ref Unsafe.Add(ref rightReference, rightIndex);
+            ref readonly T leftValue = ref UnsafeAt(left, leftIndex);
+            ref readonly T rightValue = ref UnsafeAt(right, rightIndex);
             if (comparison(leftValue, rightValue) <= 0)
             {
-                Unsafe.Add(ref destinationReference, destinationIndex) = leftValue;
+                UnsafeAt(destination, destinationIndex) = leftValue;
                 leftIndex++;
             }
             else
             {
-                Unsafe.Add(ref destinationReference, destinationIndex) = rightValue;
+                UnsafeAt(destination, destinationIndex) = rightValue;
                 rightIndex++;
             }
 
