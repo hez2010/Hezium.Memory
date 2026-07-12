@@ -58,8 +58,10 @@ public readonly ref struct BigSpan<T>
     /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents the entire <see cref="BigArray{T}"/>.
     /// </summary>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     public BigSpan(BigArray<T> array)
     {
+        ArgumentNullException.ThrowIfNull(array);
         _first = ref MemoryExtensions.GetBigArrayDataReference(array);
         _length = array._length;
     }
@@ -85,9 +87,11 @@ public readonly ref struct BigSpan<T>
     /// </summary>
     /// <param name="array">The array to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
     public BigSpan(T[] array)
     {
         ArgumentNullException.ThrowIfNull(array);
+        if (!typeof(T).IsValueType && array.GetType() != typeof(T[])) ThrowHelpers.ThrowArrayTypeMismatch();
         _first = ref MemoryMarshal.GetArrayDataReference(array);
         _length = array.Length;
     }
@@ -98,9 +102,11 @@ public readonly ref struct BigSpan<T>
     /// <param name="array">The array to represent.</param>
     /// <param name="start">The starting index of the span.</param>
     /// <param name="length">The number of elements in the span.</param>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
     public BigSpan(T[] array, int start, int length)
     {
         ArgumentNullException.ThrowIfNull(array);
+        if (!typeof(T).IsValueType && array.GetType() != typeof(T[])) ThrowHelpers.ThrowArrayTypeMismatch();
         if ((nuint)start > (nuint)array.Length || (nuint)length > (nuint)(array.Length - start)) ThrowHelpers.ThrowOutOfRange();
 
         _first = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), start);
@@ -284,7 +290,14 @@ public readonly ref struct BigSpan<T>
         /// <summary>
         /// Gets a reference to the current element in the enumerator.
         /// </summary>
-        public readonly ref T Current => ref _span[_offset];
+        public readonly ref T Current
+        {
+            get
+            {
+                if ((nuint)_offset >= (nuint)_span._length) ThrowHelpers.ThrowInvalidOperation("Enumeration has either not started or has already finished.");
+                return ref Unsafe.Add(ref _span._first, _offset);
+            }
+        }
         readonly T IEnumerator<T>.Current => Current;
         readonly object? IEnumerator.Current => Current;
 
@@ -292,12 +305,14 @@ public readonly ref struct BigSpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
-            if (_offset < _span._length - 1)
+            nint index = _offset + 1;
+            if ((nuint)index >= (nuint)_span._length)
             {
-                _offset++;
-                return true;
+                _offset = _span._length;
+                return false;
             }
-            return false;
+            _offset = index;
+            return true;
         }
 
         /// <inheritdoc/>
@@ -370,8 +385,10 @@ public readonly ref struct BigReadOnlySpan<T>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents the entire <see cref="BigArray{T}"/>.
     /// </summary>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     public BigReadOnlySpan(BigArray<T> array)
     {
+        ArgumentNullException.ThrowIfNull(array);
         _first = ref MemoryExtensions.GetBigArrayDataReference(array);
         _length = array._length;
     }
@@ -589,7 +606,14 @@ public readonly ref struct BigReadOnlySpan<T>
         }
 
         /// <inheritdoc/>
-        public readonly ref readonly T Current => ref _span[_offset];
+        public readonly ref readonly T Current
+        {
+            get
+            {
+                if ((nuint)_offset >= (nuint)_span._length) ThrowHelpers.ThrowInvalidOperation("Enumeration has either not started or has already finished.");
+                return ref Unsafe.Add(ref Unsafe.AsRef(in _span._first), _offset);
+            }
+        }
 
         readonly T IEnumerator<T>.Current => Current;
         readonly object? IEnumerator.Current => Current;
@@ -598,13 +622,15 @@ public readonly ref struct BigReadOnlySpan<T>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
-            if (_offset < _span._length - 1)
+            nint index = _offset + 1;
+            if ((nuint)index >= (nuint)_span._length)
             {
-                _offset++;
-                return true;
+                _offset = _span._length;
+                return false;
             }
 
-            return false;
+            _offset = index;
+            return true;
         }
 
         /// <inheritdoc/>

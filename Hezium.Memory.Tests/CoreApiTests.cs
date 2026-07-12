@@ -65,6 +65,39 @@ public sealed class CoreApiTests
     }
 
     [Fact]
+    public void Enumerators_RejectCurrentOutsideTheValidRange()
+    {
+        IEnumerator<int> arrayEnumerator = new BigArray<int>(1).GetEnumerator();
+        Assert.Throws<InvalidOperationException>(() => arrayEnumerator.Current);
+        Assert.True(arrayEnumerator.MoveNext());
+        Assert.False(arrayEnumerator.MoveNext());
+        Assert.Throws<InvalidOperationException>(() => arrayEnumerator.Current);
+
+        Assert.Throws<InvalidOperationException>(ReadBigSpanEnumeratorBeforeStart);
+        Assert.Throws<InvalidOperationException>(ReadBigSpanEnumeratorAfterEnd);
+        Assert.Throws<InvalidOperationException>(ReadBigReadOnlySpanEnumeratorBeforeStart);
+        Assert.Throws<InvalidOperationException>(ReadBigReadOnlySpanEnumeratorAfterEnd);
+    }
+
+    [Fact]
+    public void BigArraySpanConstructors_RejectNull()
+    {
+        Assert.Throws<ArgumentNullException>(CreateBigSpanFromNullBigArray);
+        Assert.Throws<ArgumentNullException>(CreateBigReadOnlySpanFromNullBigArray);
+    }
+
+    [Fact]
+    public void MutableArrayViews_RejectCovariantArrays()
+    {
+        object[] covariantArray = new string[1];
+
+        Assert.Throws<ArrayTypeMismatchException>(CreateBigSpanFromCovariantArray);
+        Assert.Throws<ArrayTypeMismatchException>(CreateBigSpanRangeFromCovariantArray);
+        Assert.Throws<ArrayTypeMismatchException>(() => new BigMemory<object>(covariantArray));
+        Assert.Throws<ArrayTypeMismatchException>(() => new BigMemory<object>(covariantArray, 0, 1));
+    }
+
+    [Fact]
     public void BigArray_ExtensionApis_Work()
     {
         BigArray<int> array = new(5);
@@ -249,8 +282,8 @@ public sealed class CoreApiTests
         Assert.True(span.TryCopyTo(destinationArray.AsBigSpan()));
         Assert.Equal(values, destinationArray.ToArray());
 
-        Assert.Throws<ArgumentOutOfRangeException>(CopyBigSpanToShortSpan);
-        Assert.Throws<ArgumentOutOfRangeException>(CopyBigSpanToShortBigSpan);
+        Assert.Throws<ArgumentException>(CopyBigSpanToShortSpan);
+        Assert.Throws<ArgumentException>(CopyBigSpanToShortBigSpan);
 
         Assert.Equal([1, 1, 1], SegmentLengths(span.Split(2)));
         Assert.Equal([0, 0, 1, 0, 0], SegmentLengths(span.SplitAny(new[] { 0, 2 })));
@@ -338,8 +371,8 @@ public sealed class CoreApiTests
         span.CopyTo(destinationArray.AsBigSpan());
         Assert.True(span.TryCopyTo(destinationArray.AsBigSpan()));
         Assert.Equal(values, destinationArray.ToArray());
-        Assert.Throws<ArgumentOutOfRangeException>(CopyBigReadOnlySpanToShortSpan);
-        Assert.Throws<ArgumentOutOfRangeException>(CopyBigReadOnlySpanToShortBigSpan);
+        Assert.Throws<ArgumentException>(CopyBigReadOnlySpanToShortSpan);
+        Assert.Throws<ArgumentException>(CopyBigReadOnlySpanToShortBigSpan);
 
         Assert.Equal(1, span.IndexOf(2));
         Assert.Equal(3, span.LastIndexOf(2));
@@ -443,7 +476,7 @@ public sealed class CoreApiTests
         Assert.Equal(values, destination.ToArray());
         Assert.True(memory.TryCopyTo(destination));
         Assert.False(memory.TryCopyTo(new int[4]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => memory.CopyTo(new int[4]));
+        Assert.Throws<ArgumentException>(() => memory.CopyTo(new int[4]));
         Assert.Equal(values, memory.ToBigArray().ToArray());
 
         BigReadOnlyMemory<int> readOnly = memory;
@@ -518,7 +551,7 @@ public sealed class CoreApiTests
         Assert.Equal(values, destination.ToArray());
         Assert.True(memory.TryCopyTo(destination));
         Assert.False(memory.TryCopyTo(new int[4]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => memory.CopyTo(new int[4]));
+        Assert.Throws<ArgumentException>(() => memory.CopyTo(new int[4]));
         Assert.Equal(values, memory.ToBigArray().ToArray());
 
         Assert.True(memory.Equals(new BigReadOnlyMemory<int>(values)));
@@ -639,12 +672,12 @@ public sealed class CoreApiTests
         Assert.Equal(0, span.IndexOfAnyInRange((byte)0x10, (byte)0x12));
         Assert.Equal(lastIndex, span.LastIndexOfAnyInRange((byte)0x40, (byte)0x45));
 
-        ArgumentOutOfRangeException? exception = null;
+        InvalidOperationException? exception = null;
         try
         {
             _ = span.ToArray();
         }
-        catch (ArgumentOutOfRangeException caught)
+        catch (InvalidOperationException caught)
         {
             exception = caught;
         }
@@ -794,6 +827,37 @@ public sealed class CoreApiTests
         span.Slice(5);
     }
 
+    private static void ReadBigSpanEnumeratorBeforeStart()
+    {
+        BigSpan<int>.Enumerator enumerator = ((BigSpan<int>)new int[1]).GetEnumerator();
+        _ = enumerator.Current;
+    }
+
+    private static void ReadBigSpanEnumeratorAfterEnd()
+    {
+        BigSpan<int>.Enumerator enumerator = ((BigSpan<int>)new int[1]).GetEnumerator();
+        Assert.True(enumerator.MoveNext());
+        Assert.False(enumerator.MoveNext());
+        _ = enumerator.Current;
+    }
+
+    private static void CreateBigSpanFromNullBigArray()
+    {
+        _ = new BigSpan<int>((BigArray<int>)null!);
+    }
+
+    private static void CreateBigSpanFromCovariantArray()
+    {
+        object[] covariantArray = new string[1];
+        _ = new BigSpan<object>(covariantArray);
+    }
+
+    private static void CreateBigSpanRangeFromCovariantArray()
+    {
+        object[] covariantArray = new string[1];
+        _ = new BigSpan<object>(covariantArray, 0, 1);
+    }
+
     private static void IndexBigSpanPastEnd()
     {
         BigSpan<int> span = new int[] { 1, 2, 3, 4 };
@@ -827,6 +891,25 @@ public sealed class CoreApiTests
     {
         BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
         span.Slice(6);
+    }
+
+    private static void ReadBigReadOnlySpanEnumeratorBeforeStart()
+    {
+        BigReadOnlySpan<int>.Enumerator enumerator = ((BigReadOnlySpan<int>)new int[1]).GetEnumerator();
+        _ = enumerator.Current;
+    }
+
+    private static void ReadBigReadOnlySpanEnumeratorAfterEnd()
+    {
+        BigReadOnlySpan<int>.Enumerator enumerator = ((BigReadOnlySpan<int>)new int[1]).GetEnumerator();
+        Assert.True(enumerator.MoveNext());
+        Assert.False(enumerator.MoveNext());
+        _ = enumerator.Current;
+    }
+
+    private static void CreateBigReadOnlySpanFromNullBigArray()
+    {
+        _ = new BigReadOnlySpan<int>((BigArray<int>)null!);
     }
 
     private static void IndexBigReadOnlySpanPastEnd()

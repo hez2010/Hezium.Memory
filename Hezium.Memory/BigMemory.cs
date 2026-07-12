@@ -48,6 +48,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Initializes a new instance of the <see cref="BigMemory{T}"/> struct over the specified array.
     /// </summary>
     /// <param name="array">The array to wrap, or <see langword="null"/> for empty memory.</param>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
     [OverloadResolutionPriority(-1)]
     public BigMemory(T[]? array)
     {
@@ -59,6 +60,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
             return;
         }
 
+        if (!typeof(T).IsValueType && array.GetType() != typeof(T[])) ThrowHelpers.ThrowArrayTypeMismatch();
         _storage = array;
         _start = 0;
         _length = array.Length;
@@ -70,10 +72,12 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <param name="array">The array to wrap, or <see langword="null"/> when <paramref name="start"/> and <paramref name="length"/> are zero.</param>
     /// <param name="start">The zero-based index at which the memory starts.</param>
     /// <param name="length">The number of elements in the memory.</param>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
     [OverloadResolutionPriority(-1)]
     public BigMemory(T[]? array, int start, int length)
     {
+        if (array is not null && !typeof(T).IsValueType && array.GetType() != typeof(T[])) ThrowHelpers.ThrowArrayTypeMismatch();
         nint arrayLength = array?.Length ?? 0;
         if ((nuint)start > (nuint)arrayLength || (nuint)length > (nuint)(arrayLength - start)) ThrowHelpers.ThrowOutOfRange();
 

@@ -178,7 +178,7 @@ public static class MemoryExtensions
 
     private static T[] ToArrayCore<T>(BigReadOnlySpan<T> span)
     {
-        if ((nuint)span._length > (nuint)Array.MaxLength) ThrowHelpers.ThrowOutOfRange(nameof(span));
+        if ((nuint)span._length > (nuint)Array.MaxLength) ThrowHelpers.ThrowInvalidOperation("The span is too large to fit in a single managed array.");
         T[] result = new T[(int)span._length];
         CopyToCore(span, result);
         return result;
@@ -1337,7 +1337,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(BigSpan<T> destination)
         {
-            if ((nuint)span._length > (nuint)destination._length) ThrowHelpers.ThrowOutOfRange(nameof(destination));
+            if ((nuint)span._length > (nuint)destination._length) ThrowHelpers.ThrowArgumentException(nameof(destination), "Destination is too short.");
             CopyToCore(AsReadOnlySpan(span), destination);
         }
 
@@ -1348,7 +1348,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(Span<T> destination)
         {
-            if ((nuint)span._length > (nuint)destination.Length) ThrowHelpers.ThrowOutOfRange(nameof(destination));
+            if ((nuint)span._length > (nuint)destination.Length) ThrowHelpers.ThrowArgumentException(nameof(destination), "Destination is too short.");
             CopyToCore(AsReadOnlySpan(span), destination);
         }
 
@@ -1887,7 +1887,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(BigSpan<T> destination)
         {
-            if ((nuint)span._length > (nuint)destination._length) ThrowHelpers.ThrowOutOfRange(nameof(destination));
+            if ((nuint)span._length > (nuint)destination._length) ThrowHelpers.ThrowArgumentException(nameof(destination), "Destination is too short.");
             CopyToCore(span, destination);
         }
 
@@ -1898,7 +1898,7 @@ public static class MemoryExtensions
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
         public void CopyTo(Span<T> destination)
         {
-            if ((nuint)span._length > (nuint)destination.Length) ThrowHelpers.ThrowOutOfRange(nameof(destination));
+            if ((nuint)span._length > (nuint)destination.Length) ThrowHelpers.ThrowArgumentException(nameof(destination), "Destination is too short.");
             CopyToCore(span, destination);
         }
 
@@ -2714,6 +2714,27 @@ public static class MemoryExtensions
 
 internal static class ThrowHelpers
 {
+    [DoesNotReturn]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static void ThrowArrayTypeMismatch()
+    {
+        throw new ArrayTypeMismatchException();
+    }
+
+    [DoesNotReturn]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static void ThrowArgumentException(string? paramName = null, string? message = null)
+    {
+        throw new ArgumentException(message, paramName);
+    }
+
+    [DoesNotReturn]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static void ThrowInvalidOperation(string? message = null)
+    {
+        throw new InvalidOperationException(message);
+    }
+
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void ThrowOutOfRange(string? paramName = null, string? message = null)

@@ -1,7 +1,5 @@
-﻿using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Text;
+using System.Runtime.CompilerServices;
 
 namespace Hezium.Memory;
 
@@ -18,7 +16,14 @@ public sealed partial class BigArray<T>
             _offset = -1;
         }
 
-        public readonly T Current => _array[_offset];
+        public readonly T Current
+        {
+            get
+            {
+                if ((nuint)_offset >= (nuint)_array._length) ThrowHelpers.ThrowInvalidOperation("Enumeration has either not started or has already finished.");
+                return Unsafe.Add(ref MemoryExtensions.GetBigArrayDataReference(_array), _offset);
+            }
+        }
 
         readonly object? IEnumerator.Current => Current;
 
@@ -26,13 +31,15 @@ public sealed partial class BigArray<T>
 
         public bool MoveNext()
         {
-            if (_offset < _array._length - 1)
+            nint index = _offset + 1;
+            if ((nuint)index >= (nuint)_array._length)
             {
-                _offset++;
-                return true;
+                _offset = _array._length;
+                return false;
             }
 
-            return false;
+            _offset = index;
+            return true;
         }
 
         public void Reset()
