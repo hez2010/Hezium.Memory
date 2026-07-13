@@ -19,17 +19,29 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <summary>
     /// Gets an empty <see cref="BigMemory{T}"/>.
     /// </summary>
-    public static BigMemory<T> Empty => default;
+    public static BigMemory<T> Empty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default;
+    }
 
     /// <summary>
     /// Gets the number of elements in the memory.
     /// </summary>
-    public nint Length => _length;
+    public nint Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length;
+    }
 
     /// <summary>
     /// Gets a value that indicates whether the memory is empty.
     /// </summary>
-    public bool IsEmpty => _length == 0;
+    public bool IsEmpty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length == 0;
+    }
 
     /// <summary>
     /// Gets a span over the memory.
@@ -50,6 +62,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <param name="array">The array to wrap, or <see langword="null"/> for empty memory.</param>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigMemory(T[]? array)
     {
         if (array is null)
@@ -75,6 +88,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigMemory(T[]? array, int start, int length)
     {
         if (array is not null && !typeof(T).IsValueType && array.GetType() != typeof(T[])) ThrowHelpers.ThrowArrayTypeMismatch();
@@ -91,6 +105,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// </summary>
     /// <param name="array">The array to wrap.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigMemory(BigArray<T> array)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -108,6 +123,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <param name="length">The number of elements in the memory.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigMemory(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -119,6 +135,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     }
 
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigMemory(Array? storage, nint start, nint length)
     {
         _storage = storage;
@@ -169,6 +186,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// </summary>
     /// <param name="destination">The destination memory.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void CopyTo(BigMemory<T> destination)
     {
         Span.CopyTo(destination.Span);
@@ -179,6 +197,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// </summary>
     /// <param name="destination">The destination memory.</param>
     /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryCopyTo(BigMemory<T> destination)
     {
         return Span.TryCopyTo(destination.Span);
@@ -189,6 +208,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// </summary>
     /// <returns>A new array containing the copied elements.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the memory is too large to fit in a single managed array.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T[] ToArray()
     {
         return Span.ToArray();
@@ -198,6 +218,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Copies the contents of the memory into a new <see cref="BigArray{T}"/>.
     /// </summary>
     /// <returns>A new <see cref="BigArray{T}"/> containing the copied elements.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigArray<T> ToBigArray()
     {
         return Span.ToBigArray();
@@ -207,6 +228,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Pins the memory and returns a handle to the pinned region.
     /// </summary>
     /// <returns>A handle to the pinned memory.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MemoryHandle Pin()
     {
         return Pin(_storage, _start);
@@ -238,6 +260,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     }
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Equals(BigMemory<T> other)
     {
         return ReferenceEquals(_storage, other._storage) && _start == other._start && _length == other._length;
@@ -259,6 +282,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Defines an implicit conversion from an array to <see cref="BigMemory{T}"/>.
     /// </summary>
     /// <param name="array">The array to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigMemory<T>(T[]? array)
     {
         return new BigMemory<T>(array);
@@ -268,6 +292,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Defines an implicit conversion from an array segment to <see cref="BigMemory{T}"/>.
     /// </summary>
     /// <param name="segment">The array segment to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigMemory<T>(ArraySegment<T> segment)
     {
         return new BigMemory<T>(segment.Array, segment.Offset, segment.Count);
@@ -277,6 +302,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// Defines an implicit conversion from <see cref="BigMemory{T}"/> to <see cref="BigReadOnlyMemory{T}"/>.
     /// </summary>
     /// <param name="memory">The memory to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigReadOnlyMemory<T>(BigMemory<T> memory)
     {
         return new BigReadOnlyMemory<T>(memory._storage, memory._start, memory._length);
@@ -288,6 +314,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <param name="left">The first <see cref="BigMemory{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigMemory{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(BigMemory<T> left, BigMemory<T> right)
     {
         return left.Equals(right);
@@ -299,6 +326,7 @@ public readonly struct BigMemory<T> : IEquatable<BigMemory<T>>
     /// <param name="left">The first <see cref="BigMemory{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigMemory{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(BigMemory<T> left, BigMemory<T> right)
     {
         return !(left == right);
@@ -318,17 +346,29 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// <summary>
     /// Gets an empty <see cref="BigReadOnlyMemory{T}"/>.
     /// </summary>
-    public static BigReadOnlyMemory<T> Empty => default;
+    public static BigReadOnlyMemory<T> Empty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default;
+    }
 
     /// <summary>
     /// Gets the number of elements in the memory.
     /// </summary>
-    public nint Length => _length;
+    public nint Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length;
+    }
 
     /// <summary>
     /// Gets a value that indicates whether the memory is empty.
     /// </summary>
-    public bool IsEmpty => _length == 0;
+    public bool IsEmpty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length == 0;
+    }
 
     /// <summary>
     /// Gets a read-only span over the memory.
@@ -348,6 +388,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// </summary>
     /// <param name="array">The array to wrap, or <see langword="null"/> for empty memory.</param>
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlyMemory(T[]? array)
     {
         if (array is null)
@@ -371,6 +412,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// <param name="length">The number of elements in the memory.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlyMemory(T[]? array, nint start, nint length)
     {
         nint arrayLength = array?.Length ?? 0;
@@ -386,6 +428,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// </summary>
     /// <param name="array">The array to wrap.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlyMemory(BigArray<T> array)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -403,6 +446,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// <param name="length">The number of elements in the memory.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the requested range is outside the bounds of <paramref name="array"/>.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlyMemory(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -414,6 +458,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     }
 
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigReadOnlyMemory(Array? storage, nint start, nint length)
     {
         _storage = storage;
@@ -464,6 +509,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// </summary>
     /// <param name="destination">The destination memory.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void CopyTo(BigMemory<T> destination)
     {
         Span.CopyTo(destination.Span);
@@ -474,6 +520,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// </summary>
     /// <param name="destination">The destination memory.</param>
     /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryCopyTo(BigMemory<T> destination)
     {
         return Span.TryCopyTo(destination.Span);
@@ -484,6 +531,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// </summary>
     /// <returns>A new array containing the copied elements.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the memory is too large to fit in a single managed array.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T[] ToArray()
     {
         return Span.ToArray();
@@ -493,6 +541,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// Copies the contents of the memory into a new <see cref="BigArray{T}"/>.
     /// </summary>
     /// <returns>A new <see cref="BigArray{T}"/> containing the copied elements.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigArray<T> ToBigArray()
     {
         return Span.ToBigArray();
@@ -502,12 +551,14 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// Pins the memory and returns a handle to the pinned region.
     /// </summary>
     /// <returns>A handle to the pinned memory.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MemoryHandle Pin()
     {
         return BigMemory<T>.Pin(_storage, _start);
     }
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Equals(BigReadOnlyMemory<T> other)
     {
         return ReferenceEquals(_storage, other._storage) && _start == other._start && _length == other._length;
@@ -529,6 +580,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// Defines an implicit conversion from an array to <see cref="BigReadOnlyMemory{T}"/>.
     /// </summary>
     /// <param name="array">The array to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigReadOnlyMemory<T>(T[]? array)
     {
         return new BigReadOnlyMemory<T>(array);
@@ -538,6 +590,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// Defines an implicit conversion from an array segment to <see cref="BigReadOnlyMemory{T}"/>.
     /// </summary>
     /// <param name="segment">The array segment to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigReadOnlyMemory<T>(ArraySegment<T> segment)
     {
         return new BigReadOnlyMemory<T>(segment.Array, segment.Offset, segment.Count);
@@ -549,6 +602,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// <param name="left">The first <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(BigReadOnlyMemory<T> left, BigReadOnlyMemory<T> right)
     {
         return left.Equals(right);
@@ -560,6 +614,7 @@ public readonly struct BigReadOnlyMemory<T> : IEquatable<BigReadOnlyMemory<T>>
     /// <param name="left">The first <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigReadOnlyMemory{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(BigReadOnlyMemory<T> left, BigReadOnlyMemory<T> right)
     {
         return !(left == right);

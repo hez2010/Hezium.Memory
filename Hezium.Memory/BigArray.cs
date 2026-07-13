@@ -39,6 +39,7 @@ public sealed partial class BigArray<T> : IEnumerable<T>
         _length = length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private BigArray(Array storage, nint length)
     {
         _storage = storage;
@@ -76,12 +77,20 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     /// <summary>
     /// Gets the number of elements in the array.
     /// </summary>
-    public nint Length => _length;
+    public nint Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length;
+    }
 
     /// <summary>
     /// Gets a value that indicates whether the array is empty.
     /// </summary>
-    public bool IsEmpty => _length == 0;
+    public bool IsEmpty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length == 0;
+    }
 
     /// <summary>
     /// Gets a reference to the element at the specified index.
@@ -116,11 +125,13 @@ public sealed partial class BigArray<T> : IEnumerable<T>
     /// Returns an enumerator that iterates through the array.
     /// </summary>
     /// <returns>An enumerator for the array.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IEnumerator<T> GetEnumerator()
     {
         return new Enumerator(this);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     IEnumerator IEnumerable.GetEnumerator()
     {
         return GetEnumerator();

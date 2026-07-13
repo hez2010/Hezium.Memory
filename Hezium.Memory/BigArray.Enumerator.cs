@@ -10,6 +10,7 @@ public sealed partial class BigArray<T>
         private readonly BigArray<T> _array;
         private nint _offset;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Enumerator(BigArray<T> array)
         {
             _array = array;
@@ -18,6 +19,7 @@ public sealed partial class BigArray<T>
 
         public readonly T Current
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 if ((nuint)_offset >= (nuint)_array._length) ThrowHelpers.ThrowInvalidOperation("Enumeration has either not started or has already finished.");
@@ -27,8 +29,10 @@ public sealed partial class BigArray<T>
 
         readonly object? IEnumerator.Current => Current;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void Dispose() { }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
             nint index = _offset + 1;

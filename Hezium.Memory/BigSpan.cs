@@ -22,22 +22,35 @@ public readonly ref struct BigSpan<T>
     /// <summary>
     /// Gets an empty <see cref="BigSpan{T}"/>.
     /// </summary>
-    public static BigSpan<T> Empty => default;
+    public static BigSpan<T> Empty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default;
+    }
 
     /// <summary>
     /// Gets the number of elements in the span.
     /// </summary>
-    public nint Length => _length;
+    public nint Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length;
+    }
 
     /// <summary>
     /// Gets a value that indicates whether the span is empty.
     /// </summary>
-    public bool IsEmpty => _length == 0;
+    public bool IsEmpty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length == 0;
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a single element.
     /// </summary>
     /// <param name="first">A reference to the first element in the span.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan(ref T first)
     {
         _first = ref first;
@@ -48,6 +61,7 @@ public readonly ref struct BigSpan<T>
     /// Initializes a new instance of the <see cref="BigSpan{T}"/> struct that represents a contiguous region of memory.
     /// </summary>
     /// <param name="span">The span of values to represent.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan(Span<T> span)
     {
         _first = ref MemoryMarshal.GetReference(span);
@@ -59,6 +73,7 @@ public readonly ref struct BigSpan<T>
     /// </summary>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan(BigArray<T> array)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -73,6 +88,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="start">The starting index of the span.</param>
     /// <param name="length">The number of elements in the span.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the start or length is out of range.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -88,6 +104,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="array">The array to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan(T[] array)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -103,6 +120,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="start">The starting index of the span.</param>
     /// <param name="length">The number of elements in the span.</param>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/> is covariant and its runtime type is not exactly <typeparamref name="T"/>[].</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigSpan(T[] array, int start, int length)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -120,6 +138,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="length">The number of elements in the span.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is negative.</exception>
 #pragma warning disable CS8500
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe BigSpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
@@ -133,6 +152,7 @@ public readonly ref struct BigSpan<T>
     /// </summary>
     /// <param name="first">A reference to the first element in the span.</param>
     /// <param name="length">The number of elements in the span.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigSpan(ref T first, nint length)
     {
         _first = ref first;
@@ -207,6 +227,7 @@ public readonly ref struct BigSpan<T>
     /// Returns an enumerator that iterates through the <see cref="BigSpan{T}"/>.
     /// </summary>
     /// <returns>An enumerator for the <see cref="BigSpan{T}"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Enumerator GetEnumerator()
     {
         return new Enumerator(this);
@@ -216,6 +237,7 @@ public readonly ref struct BigSpan<T>
     /// Defines an implicit conversion from <see cref="BigSpan{T}"/> to <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
     /// <param name="span">The <see cref="BigSpan{T}"/> to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigReadOnlySpan<T>(BigSpan<T> span)
     {
         return new BigReadOnlySpan<T>(ref span._first, span._length);
@@ -225,6 +247,7 @@ public readonly ref struct BigSpan<T>
     /// Defines an implicit conversion from <see cref="Span{T}"/> to <see cref="BigSpan{T}"/>.
     /// </summary>
     /// <param name="span">The <see cref="Span{T}"/> to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigSpan<T>(Span<T> span)
     {
         return new BigSpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
@@ -257,6 +280,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="left">The first <see cref="BigSpan{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigSpan{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(BigSpan<T> left, BigSpan<T> right)
     {
         return left._length == right._length && Unsafe.AreSame(ref left._first, ref right._first);
@@ -268,6 +292,7 @@ public readonly ref struct BigSpan<T>
     /// <param name="left">The first <see cref="BigSpan{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigSpan{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(BigSpan<T> left, BigSpan<T> right)
     {
         return !(left == right);
@@ -281,6 +306,7 @@ public readonly ref struct BigSpan<T>
         private readonly BigSpan<T> _span;
         private nint _offset;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Enumerator(BigSpan<T> span)
         {
             _span = span;
@@ -292,6 +318,7 @@ public readonly ref struct BigSpan<T>
         /// </summary>
         public readonly ref T Current
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 if ((nuint)_offset >= (nuint)_span._length) ThrowHelpers.ThrowInvalidOperation("Enumeration has either not started or has already finished.");
@@ -316,6 +343,7 @@ public readonly ref struct BigSpan<T>
         }
 
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void Dispose() { }
 
         /// <inheritdoc/>
@@ -339,22 +367,35 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <summary>
     /// Gets an empty <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
-    public static BigReadOnlySpan<T> Empty => default;
+    public static BigReadOnlySpan<T> Empty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default;
+    }
 
     /// <summary>
     /// Gets the number of elements in the span.
     /// </summary>
-    public nint Length => _length;
+    public nint Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length;
+    }
 
     /// <summary>
     /// Gets a value that indicates whether the span is empty.
     /// </summary>
-    public bool IsEmpty => _length == 0;
+    public bool IsEmpty
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _length == 0;
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a single element.
     /// </summary>
     /// <param name="first">A reference to the first element in the span.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(ref T first)
     {
         _first = ref first;
@@ -365,6 +406,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a span of memory starting at the specified reference and with the specified length.
     /// </summary>
     /// <param name="span">The <see cref="ReadOnlySpan{T}"/> to represent.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(ReadOnlySpan<T> span)
     {
         _first = ref MemoryMarshal.GetReference(span);
@@ -375,6 +417,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// Initializes a new instance of the <see cref="BigReadOnlySpan{T}"/> struct that represents a span of memory starting at the specified pointer and with the specified length.
     /// </summary>
     /// <param name="span">The <see cref="Span{T}"/> to represent.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(Span<T> span)
     {
         _first = ref MemoryMarshal.GetReference(span);
@@ -386,6 +429,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// </summary>
     /// <param name="array">The <see cref="BigArray{T}"/> to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(BigArray<T> array)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -399,6 +443,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="array">The array to represent.</param>
     /// <param name="start">The starting index of the span within the array.</param>
     /// <param name="length">The number of elements in the span.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(BigArray<T> array, nint start, nint length)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -414,6 +459,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="array">The array to represent.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is null.</exception>
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(T[] array)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -428,6 +474,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="start">The starting index of the span within the array.</param>
     /// <param name="length">The number of elements in the span.</param>
     [OverloadResolutionPriority(-1)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BigReadOnlySpan(T[] array, int start, int length)
     {
         ArgumentNullException.ThrowIfNull(array);
@@ -444,6 +491,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="length">The number of elements in the span.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is negative.</exception>
 #pragma warning disable CS8500
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe BigReadOnlySpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
@@ -452,6 +500,7 @@ public readonly ref struct BigReadOnlySpan<T>
         _length = length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigReadOnlySpan(ref T first, nint length)
     {
         _first = ref first;
@@ -471,6 +520,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// Defines an implicit conversion from <see cref="ReadOnlySpan{T}"/> to <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
     /// <param name="span">The <see cref="ReadOnlySpan{T}"/> to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigReadOnlySpan<T>(ReadOnlySpan<T> span)
     {
         return new BigReadOnlySpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
@@ -480,6 +530,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// Defines an implicit conversion from <see cref="Span{T}"/> to <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
     /// <param name="span">The <see cref="Span{T}"/> to convert.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator BigReadOnlySpan<T>(Span<T> span)
     {
         return new BigReadOnlySpan<T>(ref MemoryMarshal.GetReference(span), span.Length);
@@ -512,6 +563,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="left">The first <see cref="BigReadOnlySpan{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigReadOnlySpan{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(BigReadOnlySpan<T> left, BigReadOnlySpan<T> right)
     {
         return left._length == right._length && Unsafe.AreSame(in left._first, in right._first);
@@ -523,6 +575,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// <param name="left">The first <see cref="BigReadOnlySpan{T}"/> to compare.</param>
     /// <param name="right">The second <see cref="BigReadOnlySpan{T}"/> to compare.</param>
     /// <returns><see langword="true"/> if the instances are not equal; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(BigReadOnlySpan<T> left, BigReadOnlySpan<T> right)
     {
         return !(left == right);
@@ -587,6 +640,7 @@ public readonly ref struct BigReadOnlySpan<T>
     /// Returns an enumerator that iterates through the <see cref="BigReadOnlySpan{T}"/>.
     /// </summary>
     /// <returns>An enumerator that iterates through the <see cref="BigReadOnlySpan{T}"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Enumerator GetEnumerator()
     {
         return new Enumerator(this);
@@ -599,6 +653,7 @@ public readonly ref struct BigReadOnlySpan<T>
     {
         private readonly BigReadOnlySpan<T> _span;
         private nint _offset;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Enumerator(BigReadOnlySpan<T> span)
         {
             _span = span;
@@ -608,6 +663,7 @@ public readonly ref struct BigReadOnlySpan<T>
         /// <inheritdoc/>
         public readonly ref readonly T Current
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 if ((nuint)_offset >= (nuint)_span._length) ThrowHelpers.ThrowInvalidOperation("Enumeration has either not started or has already finished.");
@@ -634,6 +690,7 @@ public readonly ref struct BigReadOnlySpan<T>
         }
 
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void Dispose() { }
 
         /// <inheritdoc/>
@@ -654,25 +711,24 @@ public ref struct BigSpanSplitEnumerator<T>
     private readonly T _separator;
     private readonly BigReadOnlySpan<T> _separators;
     private readonly byte _mode;
-    private bool _finished;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigSpanSplitEnumerator(BigReadOnlySpan<T> span, T separator)
     {
         _remaining = span;
         _separator = separator;
         _separators = default;
         _mode = 0;
-        _finished = false;
         Current = default;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigSpanSplitEnumerator(BigReadOnlySpan<T> span, BigReadOnlySpan<T> separators)
     {
         _remaining = span;
         _separator = default!;
         _separators = separators;
         _mode = 1;
-        _finished = false;
         Current = default;
     }
 
@@ -685,6 +741,7 @@ public ref struct BigSpanSplitEnumerator<T>
     /// Returns this enumerator.
     /// </summary>
     /// <returns>This enumerator.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpanSplitEnumerator<T> GetEnumerator()
     {
         return this;
@@ -694,9 +751,10 @@ public ref struct BigSpanSplitEnumerator<T>
     /// Advances the enumerator to the next segment.
     /// </summary>
     /// <returns><see langword="true"/> if the enumerator was advanced; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
-        if (_finished) return false;
+        if (_remaining._length < 0) return false;
 
         nint index = _mode switch
         {
@@ -707,8 +765,7 @@ public ref struct BigSpanSplitEnumerator<T>
         if (index < 0)
         {
             Current = _remaining;
-            _remaining = BigReadOnlySpan<T>.Empty;
-            _finished = true;
+            _remaining = new BigReadOnlySpan<T>(ref Unsafe.NullRef<T>(), -1);
             return true;
         }
 
@@ -727,13 +784,12 @@ public ref struct BigSpanSearchValuesSplitEnumerator<T>
 {
     private BigReadOnlySpan<T> _remaining;
     private readonly SearchValues<T> _separators;
-    private bool _finished;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal BigSpanSearchValuesSplitEnumerator(BigReadOnlySpan<T> span, SearchValues<T> separators)
     {
         _remaining = span;
         _separators = separators;
-        _finished = false;
         Current = default;
     }
 
@@ -746,6 +802,7 @@ public ref struct BigSpanSearchValuesSplitEnumerator<T>
     /// Returns this enumerator.
     /// </summary>
     /// <returns>This enumerator.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BigSpanSearchValuesSplitEnumerator<T> GetEnumerator()
     {
         return this;
@@ -755,16 +812,16 @@ public ref struct BigSpanSearchValuesSplitEnumerator<T>
     /// Advances the enumerator to the next segment.
     /// </summary>
     /// <returns><see langword="true"/> if the enumerator was advanced; otherwise, <see langword="false"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
-        if (_finished) return false;
+        if (_remaining._length < 0) return false;
 
         nint index = _remaining.IndexOfAny(_separators);
         if (index < 0)
         {
             Current = _remaining;
-            _remaining = BigReadOnlySpan<T>.Empty;
-            _finished = true;
+            _remaining = new BigReadOnlySpan<T>(ref Unsafe.NullRef<T>(), -1);
             return true;
         }
 

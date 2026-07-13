@@ -146,6 +146,7 @@ public static class MemoryExtensions
         return SliceUnchecked(span, start, span._length - start);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool Overlaps<T>(BigReadOnlySpan<T> source, BigSpan<T> destination, out nint elementOffset)
     {
         ref T sourceReference = ref Unsafe.AsRef(in source._first);
@@ -189,6 +190,7 @@ public static class MemoryExtensions
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CopyToCore<T>(BigReadOnlySpan<T> source, Span<T> destination)
     {
         CopyToCore(source, new BigSpan<T>(ref MemoryMarshal.GetReference(destination), source._length));
@@ -892,26 +894,31 @@ public static class MemoryExtensions
         return trimmed;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BigReadOnlySpan<T> TrimStartCore<T>(BigReadOnlySpan<T> span, T trimElement)
     {
         return SliceUnchecked(span, CountTrimStartCore(span, trimElement));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BigReadOnlySpan<T> TrimStartCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
     {
         return SliceUnchecked(span, CountTrimStartCore(span, trimElements));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BigReadOnlySpan<T> TrimEndCore<T>(BigReadOnlySpan<T> span, T trimElement)
     {
         return SliceUnchecked(span, 0, span._length - CountTrimEndCore(span, trimElement));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BigReadOnlySpan<T> TrimEndCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
     {
         return SliceUnchecked(span, 0, span._length - CountTrimEndCore(span, trimElements));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BigReadOnlySpan<T> TrimCore<T>(BigReadOnlySpan<T> span, T trimElement)
     {
         nint start = CountTrimStartCore(span, trimElement);
@@ -919,6 +926,7 @@ public static class MemoryExtensions
         return SliceUnchecked(span, start, span._length - start - end);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BigReadOnlySpan<T> TrimCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> trimElements)
     {
         nint start = CountTrimStartCore(span, trimElements);
@@ -1173,11 +1181,13 @@ public static class MemoryExtensions
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool StartsWithCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
     {
         return value._length <= span._length && SequenceEqualCore(SliceUnchecked(span, 0, value._length), value, comparer);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool EndsWithCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
     {
         return value._length <= span._length && SequenceEqualCore(SliceUnchecked(span, span._length - value._length, value._length), value, comparer);
@@ -1188,6 +1198,7 @@ public static class MemoryExtensions
         /// <summary>
         /// Sets all elements in the array to the default value of <typeparamref name="T"/>.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
             array.AsBigSpan().Clear();
@@ -1197,6 +1208,7 @@ public static class MemoryExtensions
         /// Fills the array with the specified value.
         /// </summary>
         /// <param name="value">The value to assign to each element.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Fill(T value)
         {
             array.AsBigSpan().Fill(value);
@@ -1207,6 +1219,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <param name="destination">The destination array.</param>
         /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CopyTo(BigArray<T> destination)
         {
             array.AsBigSpan().CopyTo(destination.AsBigSpan());
@@ -1219,6 +1232,7 @@ public static class MemoryExtensions
         /// <param name="destinationIndex">The zero-based destination index at which copying begins.</param>
         /// <exception cref="ArgumentException">Thrown when the destination range is too small.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="destinationIndex"/> is outside the bounds of <paramref name="destination"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CopyTo(BigArray<T> destination, nint destinationIndex)
         {
             array.AsBigSpan().CopyTo(destination.AsBigSpan(destinationIndex));
@@ -1229,6 +1243,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <param name="destination">The destination array.</param>
         /// <returns><see langword="true"/> if the copy succeeded; otherwise, <see langword="false"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryCopyTo(BigArray<T> destination)
         {
             return array.AsBigSpan().TryCopyTo(destination.AsBigSpan());
@@ -1239,6 +1254,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <returns>A new array containing the copied elements.</returns>
         /// <exception cref="InvalidOperationException">Thrown when the array is too large to fit in a single managed array.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T[] ToArray()
         {
             return array.AsBigSpan().ToArray();
@@ -1250,6 +1266,7 @@ public static class MemoryExtensions
         /// <param name="value">The value to locate.</param>
         /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
         /// <returns>The index of the first occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public nint IndexOf(T value, IEqualityComparer<T>? comparer = null)
         {
             return array.AsBigSpan().IndexOf(value, comparer);
@@ -1261,6 +1278,7 @@ public static class MemoryExtensions
         /// <param name="value">The value to locate.</param>
         /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
         /// <returns>The index of the last occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public nint LastIndexOf(T value, IEqualityComparer<T>? comparer = null)
         {
             return array.AsBigSpan().LastIndexOf(value, comparer);
@@ -1272,6 +1290,7 @@ public static class MemoryExtensions
         /// <param name="value">The value to locate.</param>
         /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
         /// <returns><see langword="true"/> if <paramref name="value"/> is found; otherwise, <see langword="false"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(T value, IEqualityComparer<T>? comparer = null)
         {
             return array.AsBigSpan().Contains(value, comparer);
@@ -1284,6 +1303,7 @@ public static class MemoryExtensions
         /// <param name="comparable">The comparable object to use when searching.</param>
         /// <returns>The index of the matching value, or the bitwise complement of the insertion index if no match is found.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparable"/> is <see langword="null"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public nint BinarySearch<TComparable>(TComparable comparable)
             where TComparable : IComparable<T>
         {
@@ -1298,6 +1318,7 @@ public static class MemoryExtensions
         /// <param name="comparer">The comparer to use when searching.</param>
         /// <returns>The index of <paramref name="value"/>, or the bitwise complement of the insertion index if no match is found.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="comparer"/> is <see langword="null"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public nint BinarySearch<TComparer>(T value, TComparer comparer)
             where TComparer : IComparer<T>
         {
@@ -1422,6 +1443,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <param name="separator">The separator to split on.</param>
         /// <returns>An enumerator over the split segments.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BigSpanSplitEnumerator<T> Split(T separator)
         {
             return new BigSpanSplitEnumerator<T>(AsReadOnlySpan(span), separator);
@@ -1432,6 +1454,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <param name="separators">The separators to split on.</param>
         /// <returns>An enumerator over the split segments.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BigSpanSplitEnumerator<T> SplitAny(BigReadOnlySpan<T> separators)
         {
             return new BigSpanSplitEnumerator<T>(AsReadOnlySpan(span), separators);
@@ -1972,6 +1995,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <param name="separator">The separator to split on.</param>
         /// <returns>An enumerator over the split segments.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BigSpanSplitEnumerator<T> Split(T separator)
         {
             return new BigSpanSplitEnumerator<T>(span, separator);
@@ -1982,6 +2006,7 @@ public static class MemoryExtensions
         /// </summary>
         /// <param name="separators">The separators to split on.</param>
         /// <returns>An enumerator over the split segments.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BigSpanSplitEnumerator<T> SplitAny(BigReadOnlySpan<T> separators)
         {
             return new BigSpanSplitEnumerator<T>(span, separators);
@@ -2388,6 +2413,7 @@ public static class MemoryExtensions
         /// <param name="separators">The precomputed separators to split on.</param>
         /// <returns>An enumerator over the split segments.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="separators"/> is <see langword="null"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BigSpanSearchValuesSplitEnumerator<T> SplitAny(SearchValues<T> separators)
         {
             ArgumentNullException.ThrowIfNull(separators);
@@ -2475,6 +2501,7 @@ public static class MemoryExtensions
         /// <param name="separators">The precomputed separators to split on.</param>
         /// <returns>An enumerator over the split segments.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="separators"/> is <see langword="null"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public BigSpanSearchValuesSplitEnumerator<T> SplitAny(SearchValues<T> separators)
         {
             ArgumentNullException.ThrowIfNull(separators);
@@ -2701,6 +2728,7 @@ public static class MemoryExtensions
         /// <param name="pinned"><see langword="true"/> to allocate the underlying storage as pinned; otherwise, <see langword="false"/>.</param>
         /// <returns>A zero-initialized <see cref="BigArray{T}"/> with the specified length.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative or greater than <see cref="BigArray{T}.MaxLength"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BigArray<T> AllocateBigArray<T>(nint length, bool pinned = false)
         {
             return BigArray<T>.Allocate(length, pinned, uninitialized: false);
@@ -2713,6 +2741,7 @@ public static class MemoryExtensions
         /// <param name="pinned"><see langword="true"/> to allocate the underlying storage as pinned; otherwise, <see langword="false"/>.</param>
         /// <returns>A <see cref="BigArray{T}"/> with the specified length.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is negative or greater than <see cref="BigArray{T}.MaxLength"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BigArray<T> AllocateUninitializedBigArray<T>(nint length, bool pinned = false)
         {
             return BigArray<T>.Allocate(length, pinned, uninitialized: true);
