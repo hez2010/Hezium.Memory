@@ -136,12 +136,14 @@ public readonly ref struct BigSpan<T>
     /// </summary>
     /// <param name="pointer">A pointer to the first element in the span.</param>
     /// <param name="length">The number of elements in the span.</param>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="T"/> is a reference type or contains references.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is negative.</exception>
 #pragma warning disable CS8500
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe BigSpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>()) ThrowHelpers.ThrowArgumentException(message: "Types that contain references cannot be used with unmanaged memory.");
         if (length < 0) ThrowHelpers.ThrowOutOfRange(nameof(length), "Length must be non-negative.");
         _first = ref Unsafe.AsRef<T>(pointer);
         _length = length;
@@ -489,12 +491,14 @@ public readonly ref struct BigReadOnlySpan<T>
     /// </summary>
     /// <param name="pointer">A pointer to the first element in the span.</param>
     /// <param name="length">The number of elements in the span.</param>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="T"/> is a reference type or contains references.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is negative.</exception>
 #pragma warning disable CS8500
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe BigReadOnlySpan(T* pointer, nint length)
 #pragma warning restore CS8500
     {
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>()) ThrowHelpers.ThrowArgumentException(message: "Types that contain references cannot be used with unmanaged memory.");
         if (length < 0) ThrowHelpers.ThrowOutOfRange(nameof(length));
         _first = ref Unsafe.AsRef<T>(pointer);
         _length = length;

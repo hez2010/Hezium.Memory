@@ -98,6 +98,15 @@ public sealed class CoreApiTests
     }
 
     [Fact]
+    public void PointerSpanConstructors_RejectTypesContainingReferences()
+    {
+        Assert.Throws<ArgumentException>(CreateBigSpanFromPointer<object>);
+        Assert.Throws<ArgumentException>(CreateBigSpanFromPointer<ReferenceContainingElement>);
+        Assert.Throws<ArgumentException>(CreateBigReadOnlySpanFromPointer<object>);
+        Assert.Throws<ArgumentException>(CreateBigReadOnlySpanFromPointer<ReferenceContainingElement>);
+    }
+
+    [Fact]
     public void BigArray_ExtensionApis_Work()
     {
         BigArray<int> array = new(5);
@@ -876,6 +885,13 @@ public sealed class CoreApiTests
         _ = new BigSpan<int>((int*)0, -1);
     }
 
+    private static unsafe void CreateBigSpanFromPointer<T>()
+    {
+#pragma warning disable CS8500
+        _ = new BigSpan<T>((T*)0, 1);
+#pragma warning restore CS8500
+    }
+
     private static void CopyBigSpanToShortSpan()
     {
         BigSpan<int> span = new int[] { 0, 2, 1, 2, 0 };
@@ -930,6 +946,13 @@ public sealed class CoreApiTests
         _ = new BigReadOnlySpan<int>((int*)0, -1);
     }
 
+    private static unsafe void CreateBigReadOnlySpanFromPointer<T>()
+    {
+#pragma warning disable CS8500
+        _ = new BigReadOnlySpan<T>((T*)0, 1);
+#pragma warning restore CS8500
+    }
+
     private static void CopyBigReadOnlySpanToShortSpan()
     {
         BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
@@ -946,5 +969,10 @@ public sealed class CoreApiTests
     {
         BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
         span.IndexOfAny(null!);
+    }
+
+    private struct ReferenceContainingElement
+    {
+        public object? Value { get; set; }
     }
 }
