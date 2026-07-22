@@ -336,6 +336,85 @@ public sealed class CoreApiTests
         Assert.Equal([4, 4, 4, 4, 4], values);
     }
 
+    [Fact]
+    public void BigSpan_P0AlgorithmApis_Work()
+    {
+        int[] values = [1, 2, 1, 2, 1, 3, 2, 1, 2];
+        BigSpan<int> span = values;
+
+        Assert.Equal(4, span.Count(1));
+        Assert.Equal(3, span.Count(new[] { 1, 2 }));
+        Assert.Equal(1, span.Count(new[] { 1, 2, 1 }));
+        Assert.Equal(0, span.Count(BigReadOnlySpan<int>.Empty));
+        Assert.Equal(0, span.IndexOf(new[] { 1, 2 }));
+        Assert.Equal(7, span.LastIndexOf(new[] { 1, 2 }));
+        Assert.Equal(0, span.IndexOf(BigReadOnlySpan<int>.Empty));
+        Assert.Equal(span.Length, span.LastIndexOf(BigReadOnlySpan<int>.Empty));
+        Assert.Equal(-1, span.IndexOf(new[] { 1, 2, 1, 2, 1, 3, 2, 1, 2, 3 }));
+        Assert.Equal(-1, span.LastIndexOf(new[] { 4, 5 }));
+        Assert.Equal(5, span.CountAny(new[] { 1, 3 }));
+        Assert.Equal(0, span.CountAny(BigReadOnlySpan<int>.Empty));
+
+        string[] text = ["a", "B", "A", "b", "c", "A", "B"];
+        BigSpan<string> textSpan = text;
+        Assert.Equal(3, textSpan.Count("a", StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(3, textSpan.Count(new[] { "a", "b" }, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(0, textSpan.IndexOf(new[] { "A", "b" }, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(5, textSpan.LastIndexOf(new[] { "a", "B" }, StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(4, textSpan.CountAny(new[] { "b", "C" }, StringComparer.OrdinalIgnoreCase));
+
+        byte[] bytes = [1, 2, 3, 2, 4];
+        BigSpan<byte> byteSpan = bytes;
+        SearchValues<byte> searchValues = SearchValues.Create([2, 4]);
+        Assert.Equal(3, byteSpan.CountAny(searchValues));
+        Assert.Throws<ArgumentNullException>(CountAnyBigSpanOfNullSearchValues);
+
+        int[] reversible = [1, 2, 3, 4, 5];
+        BigSpan<int> reversibleSpan = reversible;
+        reversibleSpan.Reverse();
+        Assert.Equal([5, 4, 3, 2, 1], reversible);
+        BigSpan<int>.Empty.Reverse();
+        ((BigSpan<int>)reversible.AsSpan(0, 1)).Reverse();
+
+        int[] storage = [0, 1, 2, 3, 4, 5];
+        BigSpan<int> whole = storage;
+        BigReadOnlySpan<int> middle = storage.AsSpan(2, 3);
+        Assert.True(whole.Overlaps(middle));
+        Assert.True(whole.Overlaps(middle, out nint positiveOffset));
+        Assert.Equal(2, positiveOffset);
+        Assert.True(middle.Overlaps(whole, out nint negativeOffset));
+        Assert.Equal(-2, negativeOffset);
+        Assert.False(whole.Overlaps(new int[2], out nint unrelatedOffset));
+        Assert.Equal(0, unrelatedOffset);
+        Assert.False(BigSpan<int>.Empty.Overlaps(middle, out nint emptyOffset));
+        Assert.Equal(0, emptyOffset);
+        Assert.Throws<ArgumentException>(BigSpanOverlapsMisalignedWithOffset);
+    }
+
+    [Fact]
+    public void BigReadOnlySpan_P0AlgorithmApis_Work()
+    {
+        int[] values = [1, 2, 1, 2, 1, 3, 2, 1, 2];
+        BigReadOnlySpan<int> span = values;
+
+        Assert.Equal(4, span.Count(1));
+        Assert.Equal(3, span.Count(new[] { 1, 2 }));
+        Assert.Equal(0, span.IndexOf(new[] { 1, 2 }));
+        Assert.Equal(7, span.LastIndexOf(new[] { 1, 2 }));
+        Assert.Equal(5, span.CountAny(new[] { 1, 3 }));
+
+        byte[] bytes = [1, 2, 3, 2, 4];
+        BigReadOnlySpan<byte> byteSpan = bytes;
+        SearchValues<byte> searchValues = SearchValues.Create([2, 4]);
+        Assert.Equal(3, byteSpan.CountAny(searchValues));
+        Assert.Throws<ArgumentNullException>(CountAnyBigReadOnlySpanOfNullSearchValues);
+
+        BigReadOnlySpan<int> suffix = values.AsSpan(4);
+        Assert.True(span.Overlaps(suffix));
+        Assert.True(span.Overlaps(suffix, out nint elementOffset));
+        Assert.Equal(4, elementOffset);
+    }
+
     private static readonly int[] valueArray = new[] { 1, 2 };
 
     [Fact]
@@ -679,6 +758,21 @@ public sealed class CoreApiTests
         Assert.Equal(0, span.SequenceCompareTo(span));
         Assert.True(span.StartsWith(span));
         Assert.True(span.EndsWith(span));
+        Assert.Equal(length - 4, span.Count((byte)0x00));
+
+        BigReadOnlySpan<byte> boundaryNeedle = new byte[] { 0x22, 0x33 };
+        Assert.Equal(chunkBoundary - 1, span.IndexOf(boundaryNeedle));
+        Assert.Equal(chunkBoundary - 1, span.LastIndexOf(boundaryNeedle));
+        Assert.Equal(1, span.Count(boundaryNeedle));
+
+        Assert.True(span.Overlaps(span.Slice(lastIndex), out nint elementOffset));
+        Assert.Equal(lastIndex, elementOffset);
+
+        BigSpan<byte> boundaryPair = span.Slice(chunkBoundary - 1, 2);
+        boundaryPair.Reverse();
+        Assert.Equal(0x33, span[chunkBoundary - 1]);
+        Assert.Equal(0x22, span[chunkBoundary]);
+        boundaryPair.Reverse();
         Assert.Equal(0, span.IndexOf((byte)0x11));
         Assert.Equal(lastIndex, span.LastIndexOf((byte)0x44));
         Assert.Equal(0, span.IndexOfAny((byte)0x11, (byte)0x55));
@@ -910,6 +1004,22 @@ public sealed class CoreApiTests
         span.IndexOfAny(null!);
     }
 
+    private static void CountAnyBigSpanOfNullSearchValues()
+    {
+        BigSpan<int> span = new int[] { 0, 2, 1, 2, 0 };
+        span.CountAny(null!);
+    }
+
+    private static void BigSpanOverlapsMisalignedWithOffset()
+    {
+        byte[] bytes = new byte[9];
+        BigSpan<int> span = MemoryMarshal.Cast<byte, int>(bytes.AsSpan(0, 8));
+        BigReadOnlySpan<int> misaligned = MemoryMarshal.Cast<byte, int>(bytes.AsSpan(1, 8));
+
+        Assert.True(span.Overlaps(misaligned));
+        span.Overlaps(misaligned, out _);
+    }
+
     private static void SliceBigReadOnlySpanPastEnd()
     {
         BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
@@ -969,6 +1079,12 @@ public sealed class CoreApiTests
     {
         BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
         span.IndexOfAny(null!);
+    }
+
+    private static void CountAnyBigReadOnlySpanOfNullSearchValues()
+    {
+        BigReadOnlySpan<int> span = new int[] { 1, 2, 3, 2, 1 };
+        span.CountAny(null!);
     }
 
     private struct ReferenceContainingElement

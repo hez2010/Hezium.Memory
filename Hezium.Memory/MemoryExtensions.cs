@@ -147,27 +147,63 @@ public static class MemoryExtensions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool Overlaps<T>(BigReadOnlySpan<T> source, BigSpan<T> destination, out nint elementOffset)
+    private static bool OverlapsCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> other)
     {
-        ref T sourceReference = ref Unsafe.AsRef(in source._first);
-        nint byteOffset = Unsafe.ByteOffset(ref sourceReference, ref destination._first);
-        nint elementSize = Unsafe.SizeOf<T>();
-        if (byteOffset % elementSize != 0)
+        return OverlapsBytesCore(span, other, out _);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool OverlapsBytesCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> other, out nint byteOffset)
+    {
+        if (span._length == 0 || other._length == 0)
+        {
+            byteOffset = 0;
+            return false;
+        }
+
+        ref T spanReference = ref Unsafe.AsRef(in span._first);
+        ref T otherReference = ref Unsafe.AsRef(in other._first);
+        byteOffset = Unsafe.ByteOffset(ref spanReference, ref otherReference);
+        nuint elementSize = (nuint)Unsafe.SizeOf<T>();
+        nuint spanByteLength = GetByteLength(span._length, elementSize);
+        nuint otherByteLength = GetByteLength(other._length, elementSize);
+
+        return byteOffset >= 0
+            ? (nuint)byteOffset < spanByteLength
+            : 0 - (nuint)byteOffset < otherByteLength;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool OverlapsCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> other, out nint elementOffset)
+    {
+        if (!OverlapsBytesCore(span, other, out nint byteOffset))
         {
             elementOffset = 0;
             return false;
         }
 
+        nint elementSize = Unsafe.SizeOf<T>();
+        if (byteOffset % elementSize != 0)
+        {
+            ThrowHelpers.ThrowArgumentException(message: "Overlapping spans have mismatching alignment.");
+        }
+
         elementOffset = byteOffset / elementSize;
-        return (nuint)elementOffset < (nuint)source._length ||
-               (nuint)elementOffset > (nuint)(-destination._length);
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nuint GetByteLength(nint length, nuint elementSize)
+    {
+        nuint unsignedLength = (nuint)length;
+        return unsignedLength > nuint.MaxValue / elementSize ? nuint.MaxValue : unsignedLength * elementSize;
     }
 
     private static void CopyToCore<T>(BigReadOnlySpan<T> source, BigSpan<T> destination)
     {
         if (source._length == 0) return;
 
-        if (Overlaps(source, destination, out nint elementOffset) && elementOffset > 0)
+        if (OverlapsBytesCore(source, AsReadOnlySpan(destination), out nint byteOffset) && byteOffset > 0)
         {
             nint remaining = source._length;
             while (remaining > 0)
@@ -277,6 +313,295 @@ public static class MemoryExtensions
         }
 
         return -1;
+    }
+
+    private static nint CountCore<T>(BigReadOnlySpan<T> span, T value, IEqualityComparer<T>? comparer)
+    {
+        nint count = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            count += CreateReadOnlySpan(span, chunkLength).Count(value, comparer);
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint IndexOfCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (value._length == 0) return 0;
+        if (value._length > span._length) return -1;
+        if (value._length == 1) return IndexOfCore(span, UnsafeAt(value, 0), comparer);
+
+        return IndexOfSequenceCore(span, value, comparer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint IndexOfSequenceCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (span._length <= MaxProcessingChunkLength)
+        {
+            return CreateReadOnlySpan(span, (int)span._length)
+                .IndexOf(CreateReadOnlySpan(value, (int)value._length), comparer);
+        }
+
+        return IndexOfSequenceSlowCore(span, value, comparer);
+    }
+
+    private static nint IndexOfSequenceSlowCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (value._length <= MaxProcessingChunkLength / 2)
+        {
+            ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(value, (int)value._length);
+            nint offset = 0;
+            nint lastStart = span._length - value._length;
+            while (offset <= lastStart)
+            {
+                int chunkLength = GetChunkLength(span._length - offset);
+                int index = CreateReadOnlySpan(SliceUnchecked(span, offset, chunkLength), chunkLength).IndexOf(valueSpan, comparer);
+                if (index >= 0) return offset + index;
+
+                offset += chunkLength - value._length + 1;
+            }
+
+            return -1;
+        }
+
+        BigReadOnlySpan<T> valueTail = SliceUnchecked(value, 1);
+        nint candidateOffset = 0;
+        nint candidateCount = span._length - value._length + 1;
+        while (candidateOffset < candidateCount)
+        {
+            nint index = IndexOfCore(
+                SliceUnchecked(span, candidateOffset, candidateCount - candidateOffset),
+                UnsafeAt(value, 0),
+                comparer);
+            if (index < 0) return -1;
+
+            nint candidate = candidateOffset + index;
+            if (SequenceEqualCore(SliceUnchecked(span, candidate + 1, valueTail._length), valueTail, comparer))
+            {
+                return candidate;
+            }
+
+            candidateOffset = candidate + 1;
+        }
+
+        return -1;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint LastIndexOfCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (value._length == 0) return span._length;
+        if (value._length > span._length) return -1;
+        if (value._length == 1) return LastIndexOfCore(span, UnsafeAt(value, 0), comparer);
+
+        return LastIndexOfSequenceCore(span, value, comparer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint LastIndexOfSequenceCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (span._length <= MaxProcessingChunkLength)
+        {
+            return LastIndexOfSequenceSmallCore(span, value, comparer);
+        }
+
+        return LastIndexOfSequenceSlowCore(span, value, comparer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint LastIndexOfSequenceSmallCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        int valueLength = (int)value._length;
+        int candidateLength = (int)(span._length - value._length + 1);
+        ReadOnlySpan<T> valueTail = CreateReadOnlySpan(SliceUnchecked(value, 1), valueLength - 1);
+        while (true)
+        {
+            int candidate = CreateReadOnlySpan(span, candidateLength).LastIndexOf(UnsafeAt(value, 0), comparer);
+            if (candidate < 0) return -1;
+
+            if (CreateReadOnlySpan(SliceUnchecked(span, candidate + 1), valueLength - 1)
+                .SequenceEqual(valueTail, comparer))
+            {
+                return candidate;
+            }
+
+            candidateLength = candidate;
+        }
+    }
+
+    private static nint LastIndexOfSequenceSlowCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (value._length <= MaxProcessingChunkLength / 2)
+        {
+            nint windowEnd = span._length;
+            while (windowEnd >= value._length)
+            {
+                int chunkLength = GetChunkLength(windowEnd);
+                nint chunkStart = windowEnd - chunkLength;
+                nint index = LastIndexOfSequenceSmallCore(
+                    SliceUnchecked(span, chunkStart, chunkLength),
+                    value,
+                    comparer);
+                if (index >= 0) return chunkStart + index;
+
+                windowEnd -= chunkLength - value._length + 1;
+            }
+
+            return -1;
+        }
+
+        BigReadOnlySpan<T> valueTail = SliceUnchecked(value, 1);
+        nint candidateLimit = span._length - value._length;
+        while (true)
+        {
+            nint candidate = LastIndexOfCore(SliceUnchecked(span, 0, candidateLimit + 1), UnsafeAt(value, 0), comparer);
+            if (candidate < 0) return -1;
+
+            if (SequenceEqualCore(SliceUnchecked(span, candidate + 1, valueTail._length), valueTail, comparer))
+            {
+                return candidate;
+            }
+
+            if (candidate == 0) return -1;
+            candidateLimit = candidate - 1;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint CountCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        if (value._length == 0) return 0;
+        if (value._length > span._length) return 0;
+        if (value._length == 1) return CountCore(span, UnsafeAt(value, 0), comparer);
+
+        if (span._length <= MaxProcessingChunkLength)
+        {
+            return CountSequenceSmallCore(span, value, comparer);
+        }
+
+        return CountSequenceSlowCore(span, value, comparer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint CountSequenceSmallCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(value, (int)value._length);
+        nint count = 0;
+        while (true)
+        {
+            int index = CreateReadOnlySpan(span, (int)span._length).IndexOf(valueSpan, comparer);
+            if (index < 0) break;
+
+            count++;
+            span = SliceUnchecked(span, index + value._length);
+            if (span._length < value._length) break;
+        }
+
+        return count;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static nint CountSequenceSlowCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer)
+    {
+        nint count = 0;
+        while (true)
+        {
+            nint index = IndexOfSequenceSlowCore(span, value, comparer);
+            if (index < 0) return count;
+
+            count++;
+            span = SliceUnchecked(span, index + value._length);
+            if (span._length < value._length) return count;
+            if (span._length <= MaxProcessingChunkLength)
+            {
+                return count + CountSequenceSmallCore(span, value, comparer);
+            }
+        }
+    }
+
+    private static nint CountAnyCore<T>(BigReadOnlySpan<T> span, BigReadOnlySpan<T> values, IEqualityComparer<T>? comparer)
+    {
+        if (values._length == 0) return 0;
+
+        nint count = 0;
+        if (values._length <= MaxProcessingChunkLength)
+        {
+            ReadOnlySpan<T> valueSpan = CreateReadOnlySpan(values, (int)values._length);
+            while (span._length > 0)
+            {
+                int chunkLength = GetChunkLength(span._length);
+                BigReadOnlySpan<T> chunk = SliceUnchecked(span, 0, chunkLength);
+                while (chunk._length > 0)
+                {
+                    int index = CreateReadOnlySpan(chunk, (int)chunk._length).IndexOfAny(valueSpan, comparer);
+                    if (index < 0) break;
+
+                    count++;
+                    chunk = SliceUnchecked(chunk, index + 1);
+                }
+
+                span = SliceUnchecked(span, chunkLength);
+            }
+
+            return count;
+        }
+
+        for (nint index = 0; index < span._length; index++)
+        {
+            if (IndexOfCore(values, UnsafeAt(span, index), comparer) >= 0) count++;
+        }
+
+        return count;
+    }
+
+    private static nint CountAnyCore<T>(BigReadOnlySpan<T> span, SearchValues<T> values)
+        where T : IEquatable<T>
+    {
+        nint count = 0;
+        while (span._length > 0)
+        {
+            int chunkLength = GetChunkLength(span._length);
+            BigReadOnlySpan<T> chunk = SliceUnchecked(span, 0, chunkLength);
+            while (chunk._length > 0)
+            {
+                int index = CreateReadOnlySpan(chunk, (int)chunk._length).IndexOfAny(values);
+                if (index < 0) break;
+
+                count++;
+                chunk = SliceUnchecked(chunk, index + 1);
+            }
+
+            span = SliceUnchecked(span, chunkLength);
+        }
+
+        return count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ReverseCore<T>(BigSpan<T> span)
+    {
+        if (span._length <= 1) return;
+        if (span._length <= MaxProcessingChunkLength)
+        {
+            CreateSpan(span, (int)span._length).Reverse();
+            return;
+        }
+
+        nint start = 0;
+        nint end = span._length - 1;
+        while (start < end)
+        {
+            T temporary = UnsafeAt(span, start);
+            UnsafeAt(span, start) = UnsafeAt(span, end);
+            UnsafeAt(span, end) = temporary;
+            start++;
+            end--;
+        }
     }
 
     private static nint BinarySearchCore<T, TComparable>(BigReadOnlySpan<T> span, TComparable comparable)
@@ -1555,6 +1880,14 @@ public static class MemoryExtensions
         }
 
         /// <summary>
+        /// Reverses the sequence of the elements in the current span.
+        /// </summary>
+        public void Reverse()
+        {
+            ReverseCore(span);
+        }
+
+        /// <summary>
         /// Searches for the specified value and returns the index of its first occurrence.
         /// </summary>
         /// <param name="value">The value to locate.</param>
@@ -1588,6 +1921,50 @@ public static class MemoryExtensions
         }
 
         /// <summary>
+        /// Counts the number of times the specified value occurs in the current span.
+        /// </summary>
+        /// <param name="value">The value to count.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The number of occurrences of <paramref name="value"/>.</returns>
+        public nint Count(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return CountCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Counts the number of non-overlapping occurrences of the specified sequence in the current span.
+        /// </summary>
+        /// <param name="value">The sequence to count.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The number of non-overlapping occurrences of <paramref name="value"/>.</returns>
+        public nint Count(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return CountCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified sequence and returns the index of its first occurrence.
+        /// </summary>
+        /// <param name="value">The sequence to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the first occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint IndexOf(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return IndexOfCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified sequence and returns the index of its last occurrence.
+        /// </summary>
+        /// <param name="value">The sequence to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the last occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint LastIndexOf(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return LastIndexOfCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
         /// Searches the sorted span for a value using the specified comparable object.
         /// </summary>
         /// <typeparam name="TComparable">The type that compares the target value with span elements.</typeparam>
@@ -1612,6 +1989,17 @@ public static class MemoryExtensions
             where TComparer : IComparer<T>
         {
             return BinarySearchCore(AsReadOnlySpan(span), value, comparer);
+        }
+
+        /// <summary>
+        /// Counts the number of elements in the current span that equal any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to count.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The number of elements that equal any value in <paramref name="values"/>.</returns>
+        public nint CountAny(BigReadOnlySpan<T> values, IEqualityComparer<T>? comparer = null)
+        {
+            return CountAnyCore(AsReadOnlySpan(span), values, comparer);
         }
 
         /// <summary>
@@ -1840,6 +2228,28 @@ public static class MemoryExtensions
         public bool ContainsAnyExcept(T value0, T value1, T value2)
         {
             return IndexOfAnyExceptCore(AsReadOnlySpan(span), value0, value1, value2) >= 0;
+        }
+
+        /// <summary>
+        /// Determines whether the current span and another read-only span overlap in memory.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <returns><see langword="true"/> if the spans overlap; otherwise, <see langword="false"/>.</returns>
+        public bool Overlaps(BigReadOnlySpan<T> other)
+        {
+            return OverlapsCore(AsReadOnlySpan(span), other);
+        }
+
+        /// <summary>
+        /// Determines whether the current span and another read-only span overlap in memory and returns their element offset.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="elementOffset">When this method returns, the element offset from the current span to <paramref name="other"/>.</param>
+        /// <returns><see langword="true"/> if the spans overlap; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentException">Thrown when the spans overlap but are not aligned to an element boundary.</exception>
+        public bool Overlaps(BigReadOnlySpan<T> other, out nint elementOffset)
+        {
+            return OverlapsCore(AsReadOnlySpan(span), other, out elementOffset);
         }
 
         /// <summary>
@@ -2106,6 +2516,50 @@ public static class MemoryExtensions
         }
 
         /// <summary>
+        /// Counts the number of times the specified value occurs in the current read-only span.
+        /// </summary>
+        /// <param name="value">The value to count.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The number of occurrences of <paramref name="value"/>.</returns>
+        public nint Count(T value, IEqualityComparer<T>? comparer = null)
+        {
+            return CountCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Counts the number of non-overlapping occurrences of the specified sequence in the current read-only span.
+        /// </summary>
+        /// <param name="value">The sequence to count.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The number of non-overlapping occurrences of <paramref name="value"/>.</returns>
+        public nint Count(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return CountCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified sequence and returns the index of its first occurrence.
+        /// </summary>
+        /// <param name="value">The sequence to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the first occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint IndexOf(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return IndexOfCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Searches for the specified sequence and returns the index of its last occurrence.
+        /// </summary>
+        /// <param name="value">The sequence to locate.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The index of the last occurrence of <paramref name="value"/>, or -1 if it is not found.</returns>
+        public nint LastIndexOf(BigReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
+        {
+            return LastIndexOfCore(span, value, comparer);
+        }
+
+        /// <summary>
         /// Searches the sorted read-only span for a value using the specified comparable object.
         /// </summary>
         /// <typeparam name="TComparable">The type that compares the target value with span elements.</typeparam>
@@ -2130,6 +2584,17 @@ public static class MemoryExtensions
             where TComparer : IComparer<T>
         {
             return BinarySearchCore(span, value, comparer);
+        }
+
+        /// <summary>
+        /// Counts the number of elements in the current read-only span that equal any of the specified values.
+        /// </summary>
+        /// <param name="values">The values to count.</param>
+        /// <param name="comparer">The comparer to use, or <see langword="null"/> to use the default equality comparer.</param>
+        /// <returns>The number of elements that equal any value in <paramref name="values"/>.</returns>
+        public nint CountAny(BigReadOnlySpan<T> values, IEqualityComparer<T>? comparer = null)
+        {
+            return CountAnyCore(span, values, comparer);
         }
 
         /// <summary>
@@ -2361,6 +2826,28 @@ public static class MemoryExtensions
         }
 
         /// <summary>
+        /// Determines whether the current read-only span and another read-only span overlap in memory.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <returns><see langword="true"/> if the spans overlap; otherwise, <see langword="false"/>.</returns>
+        public bool Overlaps(BigReadOnlySpan<T> other)
+        {
+            return OverlapsCore(span, other);
+        }
+
+        /// <summary>
+        /// Determines whether the current read-only span and another read-only span overlap in memory and returns their element offset.
+        /// </summary>
+        /// <param name="other">The span to compare with the current span.</param>
+        /// <param name="elementOffset">When this method returns, the element offset from the current span to <paramref name="other"/>.</param>
+        /// <returns><see langword="true"/> if the spans overlap; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentException">Thrown when the spans overlap but are not aligned to an element boundary.</exception>
+        public bool Overlaps(BigReadOnlySpan<T> other, out nint elementOffset)
+        {
+            return OverlapsCore(span, other, out elementOffset);
+        }
+
+        /// <summary>
         /// Determines whether the current read-only span and another read-only span contain the same elements.
         /// </summary>
         /// <param name="other">The span to compare with the current span.</param>
@@ -2457,6 +2944,18 @@ public static class MemoryExtensions
         }
 
         /// <summary>
+        /// Counts the number of elements in the current span that equal any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to count.</param>
+        /// <returns>The number of elements that equal any value in <paramref name="values"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint CountAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return CountAnyCore(AsReadOnlySpan(span), values);
+        }
+
+        /// <summary>
         /// Searches for the first occurrence of any value other than the specified precomputed values.
         /// </summary>
         /// <param name="values">The precomputed values to exclude.</param>
@@ -2542,6 +3041,18 @@ public static class MemoryExtensions
         {
             ArgumentNullException.ThrowIfNull(values);
             return IndexOfAnyCore(span, values) >= 0;
+        }
+
+        /// <summary>
+        /// Counts the number of elements in the current read-only span that equal any of the specified precomputed values.
+        /// </summary>
+        /// <param name="values">The precomputed values to count.</param>
+        /// <returns>The number of elements that equal any value in <paramref name="values"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+        public nint CountAny(SearchValues<T> values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+            return CountAnyCore(span, values);
         }
 
         /// <summary>
